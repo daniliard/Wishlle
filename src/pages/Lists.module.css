@@ -1,0 +1,70 @@
+.listsGrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; padding-bottom: 8px; }
+
+.listCard {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 20px; overflow: hidden; cursor: pointer; transition: all 0.25s;
+}
+.listCard:hover { background: var(--surface2); border-color: rgba(0,200,232,0.2); transform: translateY(-3px); box-shadow: 0 16px 40px rgba(0,0,0,0.3); }
+
+.listCover {
+  height: 100px; display: flex; align-items: center; justify-content: center;
+  font-size: 2.4rem; position: relative;
+}
+.lc1 { background: linear-gradient(135deg, #1a2a4a, #0a1530); }
+.lc2 { background: linear-gradient(135deg, #0a2a2a, #051515); }
+.lc3 { background: linear-gradient(135deg, #2a1a3a, #150a20); }
+.lc4 { background: linear-gradient(135deg, #0a2a1a, #051510); }
+.lc5 { background: linear-gradient(135deg, #2a1a0a, #150a00); }
+
+.lcBadge {
+  position: absolute; top: 8px; right: 8px;
+  background: rgba(0,0,0,0.5); backdrop-filter: blur(6px);
+  border-radius: 6px; padding: 3px 8px;
+  font-size: 0.6rem; font-weight: 800; color: rgba(255,255,255,0.85);
+}
+
+.listBody { padding: 14px 16px 16px; }
+.listName { font-weight: 800; font-size: 0.9rem; margin-bottom: 3px; }
+.listMeta { font-size: 0.7rem; color: var(--muted); margin-bottom: 10px; }
+
+.thumbs { display: flex; gap: 6px; margin-bottom: 12px; }
+.thumb { width: 30px; height: 30px; border-radius: 8px; background: rgba(0,200,232,0.07); display: flex; align-items: center; justify-content: center; font-size: 0.85rem; }
+.thumbMore { background: var(--surface2); font-size: 0.58rem; color: var(--muted); font-weight: 800; }
+
+.listFooter { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.progressWrap { flex: 1; }
+.progressLabel { font-size: 0.6rem; color: var(--muted); margin-bottom: 4px; }
+.progressBar { height: 4px; background: var(--surface2); border-radius: 2px; }
+.progressFill { height: 100%; border-radius: 2px; background: var(--cyan); }
+
+.addCard {
+  background: var(--surface); border: 1.5px dashed rgba(0,200,232,0.2);
+  border-radius: 20px; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 8px;
+  cursor: pointer; transition: all 0.25s; min-height: 220px;
+  color: rgba(0,200,232,0.4); font-weight: 700; font-size: 0.85rem;
+}
+.addCard:hover { border-color: var(--cyan); color: var(--cyan); background: rgba(0,200,232,0.03); }
+.addPlus { font-size: 2rem; }
+
+/* Wish list */
+.wishList { display: flex; flex-direction: column; gap: 10px; margin-bottom: 60px; }
+.wishRow {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 16px; padding: 14px 18px;
+  display: flex; align-items: center; gap: 14px; cursor: pointer; transition: all 0.2s;
+}
+.wishRow:hover { background: var(--surface2); border-color: rgba(0,200,232,0.2); transform: translateX(4px); }
+.wrImg { width: 48px; height: 48px; border-radius: 12px; background: rgba(0,200,232,0.07); display: flex; align-items: center; justify-content: center; font-size: 1.4rem; flex-shrink: 0; }
+.wrInfo { flex: 1; }
+.wrName { font-weight: 700; font-size: 0.88rem; margin-bottom: 2px; }
+.wrMeta { font-size: 0.7rem; color: var(--muted); }
+.wrPrice { font-weight: 900; font-size: 0.92rem; color: var(--cyan); white-space: nowrap; }
+.wrActions { display: flex; gap: 6px; }
+
+@media (max-width: 1024px) { .listsGrid { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 768px) {
+  .listsGrid { grid-template-columns: 1fr; }
+  .wishRow { flex-wrap: wrap; }
+  .wrActions { display: none; }
+}
