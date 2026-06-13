@@ -1,12 +1,7 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Footer from '../components/Footer'
 import s from './Home.module.css'
-
-const upcoming = [
-  { name: 'Еліни',   date: 'Субота, 24 серпня', days: 'Завтра 🔥', urgent: true },
-  { name: 'Андрія',  date: 'Четвер, 29 серпня',  days: '6 днів',   urgent: false },
-  { name: 'Олени',   date: 'Пн, 7 квітня 2026',  days: '226 днів', urgent: false },
-]
+import { getMe, getMyLists, getMyEvents, getCatalog } from '../api/client'
 
 const features = [
   { icon: '🎁', title: 'Твій вішліст',      text: 'Додавай речі які хочеш. Ділися списком одним посиланням.' },
@@ -14,29 +9,46 @@ const features = [
   { icon: '🗓️', title: 'Календар подій',    text: 'Всі важливі дати в одному місці. Жодного пропущеного дня.' },
 ]
 
-const activity = [
-  { av: '👨', name: 'Андрій', text: 'додав 3 товари до «Хочу на ДН»', time: '2 год тому',  thumb: '⌨️' },
-  { av: '👩', name: 'Еліна',  text: 'створила список «Японія ✈️»',     time: '5 год тому',  thumb: '🗾' },
-  { av: '👩', name: 'Олена',  text: 'зарезервувала товар зі списку',   time: 'Вчора 19:30', thumb: '🎧' },
-]
+function daysUntil(dateStr) {
+  const today = new Date(); today.setHours(0,0,0,0)
+  const d = new Date(dateStr); d.setHours(0,0,0,0)
+  return Math.round((d - today) / 86400000)
+}
 
-const catalog = [
-  { emoji: '🎧', name: 'Apple AirPods Max',  price: '18 000 ₴' },
-  { emoji: '⌚', name: 'Apple Watch SE 2',   price: '9 500 ₴' },
-  { emoji: '🎮', name: 'Asus ROG Ally',      price: '28 000 ₴' },
-  { emoji: '📱', name: 'iPhone 15 Pro Max',  price: '55 000 ₴' },
-  { emoji: '🪑', name: 'DXRacer Air Pro',    price: '12 000 ₴' },
-  { emoji: '🖥️', name: 'LG UltraWide 34"', price: '22 000 ₴' },
-]
-
-const stats = [
-  { icon: '📋', num: '12', label: 'Списків' },
-  { icon: '🎁', num: '47', label: 'Товарів' },
-  { icon: '👥', num: '8',  label: 'Друзів' },
-  { icon: '🔒', num: '3',  label: 'Для тебе' },
-]
+function formatDays(n) {
+  if (n === 0) return 'Сьогодні 🔥'
+  if (n === 1) return 'Завтра 🔥'
+  return `${n} днів`
+}
 
 export default function Home({ onNav }) {
+  const [user, setUser] = useState(null)
+  const [lists, setLists] = useState([])
+  const [events, setEvents] = useState([])
+  const [catalog, setCatalog] = useState([])
+
+  useEffect(() => {
+    getMe().then(setUser).catch(() => {})
+    getMyLists().then(data => setLists(Array.isArray(data) ? data : [])).catch(() => {})
+    getMyEvents().then(data => setEvents(Array.isArray(data) ? data : [])).catch(() => {})
+    getCatalog().then(data => setCatalog(Array.isArray(data) ? data.slice(0,6) : [])).catch(() => {})
+  }, [])
+
+  const firstName = user?.display_name?.split(' ')[0] || user?.username || 'друже'
+
+  const stats = [
+    { icon: '📋', num: lists.length, label: 'Списків' },
+    { icon: '🎁', num: lists.reduce((a, l) => a + (l.items_count || 0), 0), label: 'Товарів' },
+    { icon: '🗓️', num: events.length, label: 'Подій' },
+  ]
+
+  const upcomingEvents = events
+    .filter(e => e.event_date)
+    .map(e => ({ ...e, daysLeft: daysUntil(e.event_date) }))
+    .filter(e => e.daysLeft >= 0)
+    .sort((a, b) => a.daysLeft - b.daysLeft)
+    .slice(0, 3)
+
   return (
     <div className="anim-fade-up">
       {/* HERO */}
@@ -51,9 +63,13 @@ export default function Home({ onNav }) {
           </div>
         </div>
         <div className={s.heroRight}>
-          <div className={s.heroAv}>😎</div>
+          <div className={s.heroAv}>
+            {user?.avatar_url
+              ? <img src={user.avatar_url} alt="avatar" style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }} />
+              : '😎'}
+          </div>
           <div className={s.heroGreeting}>
-            <div className={s.hg1}>Привіт, Максим 👋</div>
+            <div className={s.hg1}>Привіт, {firstName} 👋</div>
             <div className={s.hg2}>Що подаруємо сьогодні?</div>
           </div>
         </div>
@@ -80,19 +96,26 @@ export default function Home({ onNav }) {
           <div className="section-title">Найближчі події</div>
           <a className="section-link" onClick={() => onNav('events')}>Дивитись усі →</a>
         </div>
-        <div className={s.eventsStrip}>
-          {upcoming.map(ev => (
-            <div key={ev.name} className={s.evCard} onClick={() => onNav('events')}>
-              <div className={s.evCover}>🎂</div>
-              <div className={s.evBadge}>🎂 День народження</div>
-              <div className={s.evBody}>
-                <div className={s.evName}>ДН {ev.name}</div>
-                <div className={s.evDate}>{ev.date}</div>
-                <span className={`${s.evCount} ${ev.urgent ? s.urgent : ''}`}>{ev.days}</span>
+        {upcomingEvents.length === 0 ? (
+          <div style={{ color: 'var(--text-muted)', padding: '20px 0', fontSize: '0.9rem' }}>
+            Немає найближчих подій.{' '}
+            <span style={{ color: 'var(--cyan)', cursor: 'pointer' }} onClick={() => onNav('events')}>Створити подію →</span>
+          </div>
+        ) : (
+          <div className={s.eventsStrip}>
+            {upcomingEvents.map(ev => (
+              <div key={ev.id} className={s.evCard} onClick={() => onNav('events')}>
+                <div className={s.evCover}>🎂</div>
+                <div className={s.evBadge}>🗓️ {ev.event_type === 'birthday' ? 'День народження' : 'Подія'}</div>
+                <div className={s.evBody}>
+                  <div className={s.evName}>{ev.title}</div>
+                  <div className={s.evDate}>{new Date(ev.event_date).toLocaleDateString('uk-UA', { day: 'numeric', month: 'long' })}</div>
+                  <span className={`${s.evCount} ${ev.daysLeft <= 1 ? s.urgent : ''}`}>{formatDays(ev.daysLeft)}</span>
+                </div>
               </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* FEATURES */}
@@ -111,47 +134,33 @@ export default function Home({ onNav }) {
         </div>
       </div>
 
-      {/* ACTIVITY */}
-      <div className="wrap">
-        <div className="section-header" style={{ paddingTop: 40 }}>
-          <div className="section-title">Що нового у друзів</div>
-          <a className="section-link" onClick={() => onNav('friends')}>До друзів →</a>
-        </div>
-        <div className={s.activityList}>
-          {activity.map(a => (
-            <div key={a.name} className={s.actItem} onClick={() => onNav('friends')}>
-              <div className={s.actAv}>{a.av}</div>
-              <div className={s.actText}>
-                <p><strong>{a.name}</strong> {a.text}</p>
-                <div className={s.actTime}>{a.time}</div>
-              </div>
-              <div className={s.actThumb}>{a.thumb}</div>
-            </div>
-          ))}
-        </div>
-      </div>
-
       {/* CATALOG */}
-      <div className="wrap">
-        <div className="section-header" style={{ paddingTop: 40 }}>
-          <div className="section-title">Підбірка для надихання</div>
-          <a className="section-link" onClick={() => onNav('catalog')}>До каталогу →</a>
-        </div>
-        <div className={s.catalogGrid}>
-          {catalog.map(c => (
-            <div key={c.name} className={s.catalogCard}>
-              <div className={s.catalogImg}>{c.emoji}</div>
-              <div className={s.catalogBody}>
-                <div className={s.catalogName}>{c.name}</div>
-                <div className={s.catalogPrice}>{c.price}</div>
+      {catalog.length > 0 && (
+        <div className="wrap">
+          <div className="section-header" style={{ paddingTop: 40 }}>
+            <div className="section-title">Підбірка для натхнення</div>
+            <a className="section-link" onClick={() => onNav('catalog')}>До каталогу →</a>
+          </div>
+          <div className={s.catalogGrid}>
+            {catalog.map(c => (
+              <div key={c.id} className={s.catalogCard}>
+                <div className={s.catalogImg}>
+                  {c.image_url
+                    ? <img src={c.image_url} alt={c.title} style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 12 }} />
+                    : '🎁'}
+                </div>
+                <div className={s.catalogBody}>
+                  <div className={s.catalogName}>{c.title}</div>
+                  <div className={s.catalogPrice}>{c.price ? `${c.price} ${c.currency || '₴'}` : ''}</div>
+                </div>
+                <div className={s.catalogOverlay}>
+                  <button className="btn-cyan" style={{ fontSize: '0.78rem', padding: '8px 16px' }}>＋ В список</button>
+                </div>
               </div>
-              <div className={s.catalogOverlay}>
-                <button className="btn-cyan" style={{ fontSize: '0.78rem', padding: '8px 16px' }}>＋ В список</button>
-              </div>
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
-      </div>
+      )}
 
       <div className="wrap"><Footer /></div>
     </div>
