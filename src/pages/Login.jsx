@@ -1,65 +1,36 @@
 import { useState } from 'react'
-import { loginTelegramOIDC, loginTelegram } from '../api/client'
+import { loginTelegramOIDC } from '../api/client'
 
-const CLIENT_ID = '8624605092'
-const ORIGIN    = 'https://wishlle-4isp.vercel.app'
+const CLIENT_ID = 8624605092
 
 export default function Login({ onLogin }) {
   const [loading, setLoading] = useState(false)
   const [error, setError]     = useState(null)
 
-  function openPopup() {
+  function handleClick() {
     setError(null)
 
-    const url = `https://oauth.telegram.org/auth?bot_id=${CLIENT_ID}&origin=${encodeURIComponent(ORIGIN)}&embed=1&request_access=write&return_to=${encodeURIComponent(ORIGIN)}`
-    const w = 550, h = 600
-    const left = window.screenX + (window.outerWidth  - w) / 2
-    const top  = window.screenY + (window.outerHeight - h) / 2
-
-    const popup = window.open(url, 'TelegramAuth', `width=${w},height=${h},left=${left},top=${top},toolbar=0,scrollbars=0,status=0,resizable=0`)
-
-    if (!popup) { setError('Браузер заблокував popup. Дозволь попапи для цього сайту.'); return }
+    if (!window.Telegram?.Login?.auth) {
+      setError('Telegram SDK ще завантажується, спробуй ще раз')
+      return
+    }
 
     setLoading(true)
 
-    function onMessage(e) {
-      if (e.origin !== 'https://oauth.telegram.org') return
-      const data = typeof e.data === 'string' ? JSON.parse(e.data) : e.data
-      if (!data) return
-      window.removeEventListener('message', onMessage)
-      clearInterval(timer)
-      popup.close()
-      handleData(data)
-    }
-
-    window.addEventListener('message', onMessage)
-
-    const timer = setInterval(() => {
-      if (popup.closed) { clearInterval(timer); window.removeEventListener('message', onMessage); setLoading(false) }
-    }, 500)
-  }
-
-  async function handleData(data) {
-    try {
-      if (data.event === 'auth_result') {
-        const user = data.result
-        if (!user) throw new Error('Авторизацію скасовано')
-        if (user.id_token) {
-          await loginTelegramOIDC(user.id_token)
-        } else {
-          const { hash, auth_date, ...fields } = user
-          const p = new URLSearchParams()
-          p.set('user', JSON.stringify(fields))
-          p.set('auth_date', String(auth_date))
-          p.set('hash', hash)
-          await loginTelegram(p.toString())
+    window.Telegram.Login.auth(
+      { client_id: CLIENT_ID, request_access: ['write'] },
+      async (data) => {
+        if (!data) { setLoading(false); return }
+        if (data.error) { setError('Telegram: ' + data.error); setLoading(false); return }
+        try {
+          await loginTelegramOIDC(data.id_token)
+          onLogin()
+        } catch (e) {
+          setError(e.message)
+          setLoading(false)
         }
-        onLogin()
       }
-    } catch (e) {
-      setError(e.message)
-      setLoading(false)
-    }
+    )
   }
 
   return (
@@ -72,7 +43,7 @@ export default function Login({ onLogin }) {
       </div>
 
       <button
-        onClick={openPopup}
+        onClick={handleClick}
         disabled={loading}
         style={{
           display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12,
@@ -83,13 +54,19 @@ export default function Login({ onLogin }) {
           cursor: loading ? 'wait' : 'pointer',
           opacity: loading ? 0.7 : 1,
           boxShadow: '0 4px 20px rgba(34,158,217,0.35)',
-          minWidth: 240,
+          minWidth: 240, transition: 'all 0.2s',
         }}
+        onMouseEnter={e => { if (!loading) e.currentTarget.style.transform = 'translateY(-2px)' }}
+        onMouseLeave={e => { e.currentTarget.style.transform = '' }}
       >
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="white">
-          <path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.894 8.221l-1.97 9.28c-.145.658-.537.818-1.084.508l-3-2.21-1.447 1.394c-.16.16-.295.295-.605.295l.213-3.053 5.56-5.023c.242-.213-.054-.333-.373-.12L8.32 13.617l-2.96-.924c-.643-.204-.657-.643.136-.953l11.57-4.461c.537-.194 1.006.131.828.942z"/>
-        </svg>
-        {loading ? '⏳ Авторизація...' : 'Увійти через Telegram'}
+        {loading ? '⏳ Авторизація...' : (
+          <>
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="white">
+              <path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.894 8.221l-1.97 9.28c-.145.658-.537.818-1.084.508l-3-2.21-1.447 1.394c-.16.16-.295.295-.605.295l.213-3.053 5.56-5.023c.242-.213-.054-.333-.373-.12L8.32 13.617l-2.96-.924c-.643-.204-.657-.643.136-.953l11.57-4.461c.537-.194 1.006.131.828.942z"/>
+            </svg>
+            Увійти через Telegram
+          </>
+        )}
       </button>
 
       {error && <p style={{ color: '#ff4d4d', fontSize: '0.9rem', textAlign: 'center', maxWidth: 280 }}>{error}</p>}
