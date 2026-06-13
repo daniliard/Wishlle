@@ -168,3 +168,13 @@ export async function getCatalog() {
 export async function searchUsers(username) {
   return directus(`/items/users?filter[username][_icontains]=${username}&limit=10`)
 }
+
+// ── Новий Telegram Login (OIDC JWT, telegram-login.js) ──────────────────────
+export async function loginTelegramOIDC(idToken) {
+  const data = await request(`${BACKEND_URL}/api/auth/telegram-oidc`, {
+    method: 'POST',
+    body: JSON.stringify({ id_token: idToken }),
+  })
+  setAuth(data.access_token, data.user_id, data.user)
+  return data
+}
