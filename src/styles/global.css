@@ -459,3 +459,84 @@ body::before {
   .landing-footer { padding: 0 16px; }
   .tg-login-button { width: 100%; }
 }
+
+
+/* ── GOOGLE AUTH ─────────────────────────────────────────────────────── */
+.auth-options {
+  width: min(360px, 100%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  position: relative;
+}
+.auth-options .tg-login-wrap,
+.auth-options .google-login-wrap {
+  width: 100%;
+}
+.auth-options__divider {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: var(--muted);
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+.auth-options__divider::before,
+.auth-options__divider::after {
+  content: '';
+  height: 1px;
+  flex: 1;
+  background: var(--border2);
+}
+.google-login-wrap {
+  min-height: 44px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+.google-login-button-host {
+  min-height: 44px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+.google-login-loading {
+  min-width: 300px;
+  min-height: 44px;
+  padding: 10px 18px;
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,0.18);
+  background: #fff;
+  color: #3c4043;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  font-size: 0.88rem;
+  font-weight: 700;
+}
+.google-login-spinner {
+  width: 17px;
+  height: 17px;
+  border: 2px solid rgba(60,64,67,0.22);
+  border-top-color: #4285f4;
+  border-radius: 50%;
+  animation: auth-spin 0.75s linear infinite;
+}
+.google-login-error {
+  margin: 0;
+  max-width: 360px;
+  color: #ff7373;
+  font-size: 0.8rem;
+  line-height: 1.45;
+  text-align: center;
+}
+
+@media (max-width: 768px) {
+  .google-login-loading { min-width: min(300px, 100%); }
+  .google-login-button-host { max-width: 100%; overflow: hidden; }
+}

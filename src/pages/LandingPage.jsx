@@ -1,6 +1,8 @@
-import { useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import Footer from '../components/Footer'
+import { loginGoogle } from '../api/client'
 import { openTelegramLoginPopup } from '../auth/browserTelegram'
+import { getGoogleClientId, loadGoogleIdentityServices } from '../auth/google'
 import { looksLikeTelegramLaunch } from '../auth/telegram'
 
 const features = [
@@ -58,7 +60,126 @@ function TelegramLoginButton({ onLogin, small = false }) {
   )
 }
 
+function GoogleLoginButton({ ready, loading, error, onRenderError }) {
+  const buttonRef = useRef(null)
+
+  useEffect(() => {
+    if (!ready || loading || !buttonRef.current || !window.google?.accounts?.id) return
+
+    try {
+      buttonRef.current.replaceChildren()
+      window.google.accounts.id.renderButton(buttonRef.current, {
+        type: 'standard',
+        theme: 'outline',
+        size: 'large',
+        text: 'signin_with',
+        shape: 'pill',
+        logo_alignment: 'left',
+        width: 300,
+        locale: 'uk',
+      })
+    } catch (renderError) {
+      onRenderError(renderError)
+    }
+  }, [ready, loading, onRenderError])
+
+  return (
+    <div className="google-login-wrap">
+      {loading ? (
+        <div className="google-login-loading">
+          <span className="google-login-spinner" aria-hidden="true" />
+          Входимо через Google…
+        </div>
+      ) : (
+        <div ref={buttonRef} className="google-login-button-host" aria-label="Увійти через Google" />
+      )}
+      {!ready && !loading && !error && (
+        <div className="google-login-loading">Завантажуємо Google…</div>
+      )}
+      {error && <p className="google-login-error">{error}</p>}
+    </div>
+  )
+}
+
+function AuthOptions({ onLogin, googleReady, googleLoading, googleError, onGoogleRenderError }) {
+  return (
+    <div className="auth-options">
+      <TelegramLoginButton onLogin={onLogin} />
+      <div className="auth-options__divider"><span>або</span></div>
+      <GoogleLoginButton
+        ready={googleReady}
+        loading={googleLoading}
+        error={googleError}
+        onRenderError={onGoogleRenderError}
+      />
+    </div>
+  )
+}
+
 export default function LandingPage({ onLogin }) {
+  const [googleReady, setGoogleReady] = useState(false)
+  const [googleLoading, setGoogleLoading] = useState(false)
+  const [googleError, setGoogleError] = useState('')
+
+  const handleGoogleCredential = useCallback(async (response) => {
+    const credential = response?.credential
+    if (!credential) {
+      setGoogleError('Google не повернув ID-токен. Спробуй ще раз.')
+      return
+    }
+
+    setGoogleError('')
+    setGoogleLoading(true)
+
+    try {
+      await loginGoogle(credential)
+      onLogin()
+    } catch (authError) {
+      setGoogleError(authError?.message || 'Не вдалося увійти через Google.')
+    } finally {
+      setGoogleLoading(false)
+    }
+  }, [onLogin])
+
+  const handleGoogleRenderError = useCallback((renderError) => {
+    setGoogleError(renderError?.message || 'Не вдалося показати кнопку Google.')
+  }, [])
+
+  useEffect(() => {
+    const clientId = getGoogleClientId()
+    let cancelled = false
+
+    if (!clientId) {
+      setGoogleError('Не задано VITE_GOOGLE_CLIENT_ID у змінних середовища Vercel.')
+      return undefined
+    }
+
+    loadGoogleIdentityServices()
+      .then((google) => {
+        if (cancelled) return
+
+        google.accounts.id.initialize({
+          client_id: clientId,
+          callback: handleGoogleCredential,
+          ux_mode: 'popup',
+          context: 'signin',
+          auto_select: false,
+          cancel_on_tap_outside: true,
+        })
+        setGoogleReady(true)
+      })
+      .catch((loadError) => {
+        if (!cancelled) {
+          setGoogleError(loadError?.message || 'Не вдалося завантажити Google Identity Services.')
+        }
+      })
+
+    return () => {
+      cancelled = true
+      try { window.google?.accounts?.id?.cancel() } catch {}
+    }
+  }, [handleGoogleCredential])
+
   return (
     <div className="landing-page">
       <nav className="landing-nav">
@@ -80,8 +201,14 @@ export default function LandingPage({ onLogin }) {
             та не забувай про важливі дати.
           </p>
 
-          <TelegramLoginButton onLogin={onLogin} />
-          <p className="landing-auth-note">У браузері відкриється захищене вікно Telegram для підтвердження входу.</p>
+          <AuthOptions
+            onLogin={onLogin}
+            googleReady={googleReady}
+            googleLoading={googleLoading}
+            googleError={googleError}
+            onGoogleRenderError={handleGoogleRenderError}
+          />
+          <p className="landing-auth-note">Обери Telegram або Google. Паролі Wishlle не зберігає.</p>
 
           <div className="landing-scroll-hint">
             <span>↓</span>
@@ -104,8 +231,14 @@ export default function LandingPage({ onLogin }) {
 
         <section className="landing-cta">
           <h2>Готовий спробувати?</h2>
-          <p>Підтвердження через Telegram займає кілька секунд.</p>
-          <TelegramLoginButton onLogin={onLogin} />
+          <p>Обери зручний спосіб входу — Telegram або Google.</p>
+          <AuthOptions
+            onLogin={onLogin}
+            googleReady={googleReady}
+            googleLoading={googleLoading}
+            googleError={googleError}
+            onGoogleRenderError={handleGoogleRenderError}
+          />
         </section>
       </main>
 
