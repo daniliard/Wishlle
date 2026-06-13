@@ -41,6 +41,7 @@ export default function Login({ onLogin }) {
           {
             client_id: 8624605092,
             request_access: ['write'],
+            bot_id: 8624605092,
           },
           async (data) => {
             console.log('Telegram Login data:', data)
