@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 
 export default function AuthCallback() {
-  const [status, setStatus] = useState('Завершуємо авторизацію...')
+  const [status, setStatus] = useState('Завершуємо вхід...')
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
@@ -9,31 +9,37 @@ export default function AuthCallback() {
     const state  = params.get('state')
     const error  = params.get('error')
 
+    // Чи це вікно — popup? (відкрите через window.open з нашого сайту)
+    const hasOpener = !!window.opener && window.opener !== window
+
     if (error) {
       setStatus('Помилка: ' + error)
-      // Пробуємо postMessage, якщо opener є
-      try { window.opener?.postMessage({ type: 'tg_auth_error', error }, '*') } catch {}
-      // Якщо opener немає — зберігаємо в sessionStorage і редіректимо
+      if (hasOpener) {
+        try { window.opener.postMessage({ type: 'tg_auth_error', error }, '*') } catch {}
+      }
       sessionStorage.setItem('tg_auth_result', JSON.stringify({ error }))
-      setTimeout(() => { window.location.href = '/' }, 1500)
+      setTimeout(() => { if (hasOpener) window.close(); else window.location.replace('/') }, 800)
       return
     }
 
     if (code && state) {
-      setStatus('Авторизуємось...')
+      // Завжди пишемо результат в sessionStorage — це спільне сховище вкладок одного origin
+      sessionStorage.setItem('tg_auth_result', JSON.stringify({ code, state }))
 
-      // Варіант 1: є opener (popup) → postMessage
-      if (window.opener && !window.opener.closed) {
-        try {
-          window.opener.postMessage({ type: 'tg_auth_code', code, returnedState: state }, '*')
-          window.close()
-          return
-        } catch {}
+      // Якщо popup — повідомляємо батьківське вікно і закриваємось
+      if (hasOpener) {
+        try { window.opener.postMessage({ type: 'tg_auth_code', code, returnedState: state }, '*') } catch {}
+        setStatus('Готово! Закриваємо вікно...')
+        setTimeout(() => window.close(), 300)
+        return
       }
 
-      // Варіант 2: немає opener (redirect flow) → зберігаємо і йдемо на головну
-      sessionStorage.setItem('tg_auth_result', JSON.stringify({ code, state }))
-      window.location.href = '/'
+      // Якщо це не popup (повний redirect) — йдемо на головну, App там підхопить
+      setStatus('Авторизуємось...')
+      window.location.replace('/')
+    } else {
+      setStatus('Невірний запит авторизації')
+      setTimeout(() => window.location.replace('/'), 1000)
     }
   }, [])
 

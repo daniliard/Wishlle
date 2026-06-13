@@ -178,3 +178,13 @@ export async function getCatalog() {
 export async function searchUsers(username) {
   return directus(`/items/users?filter[username][_icontains]=${encodeURIComponent(username)}&limit=10&fields[]=id,display_name,username,avatar_url`)
 }
+
+// ── Завершення браузерного OAuth (обмін code → токен) ───────────────────────
+export async function finishBrowserLogin(code, codeVerifier) {
+  const data = await request(`${BACKEND_URL}/api/auth/telegram/callback`, {
+    method: 'POST',
+    body: JSON.stringify({ code, code_verifier: codeVerifier }),
+  })
+  setAuth(data.access_token, data.user_id, data.user)
+  return data
+}
