@@ -1,0 +1,156 @@
+const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'https://wishllebackend-production.up.railway.app'
+const DIRECTUS_URL = import.meta.env.VITE_DIRECTUS_URL || 'https://directus-production-5c4b.up.railway.app'
+
+export function getToken() { return localStorage.getItem('wishlle_token') }
+export function getUserId() { return localStorage.getItem('wishlle_user_id') }
+
+function setAuth(token, userId) {
+  localStorage.setItem('wishlle_token', token)
+  localStorage.setItem('wishlle_user_id', userId)
+}
+
+export function removeAuth() {
+  localStorage.removeItem('wishlle_token')
+  localStorage.removeItem('wishlle_user_id')
+}
+
+export function isLoggedIn() { return !!getToken() }
+
+async function request(url, options = {}) {
+  const token = getToken()
+  const headers = {
+    'Content-Type': 'application/json',
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    ...options.headers,
+  }
+  const res = await fetch(url, { ...options, headers })
+  if (res.status === 401) { removeAuth(); window.location.reload(); return }
+  if (res.status === 204) return null
+  const data = await res.json()
+  if (!res.ok) throw new Error(data.detail || data.errors?.[0]?.message || `HTTP ${res.status}`)
+  return data
+}
+
+async function directus(path, options = {}) {
+  const res = await request(`${DIRECTUS_URL}${path}`, options)
+  return res?.data ?? res
+}
+
+// Auth
+export async function loginTelegram(initData) {
+  const data = await request(`${BACKEND_URL}/api/auth/telegram`, {
+    method: 'POST',
+    body: JSON.stringify({ init_data: initData }),
+  })
+  setAuth(data.access_token, data.user_id)
+  return data
+}
+
+export async function loginGoogle(idToken) {
+  const data = await request(`${BACKEND_URL}/api/auth/google`, {
+    method: 'POST',
+    body: JSON.stringify({ id_token: idToken }),
+  })
+  setAuth(data.access_token, data.user_id)
+  return data
+}
+
+export function logout() { removeAuth(); window.location.reload() }
+
+// Parser
+export async function parseUrl(url) {
+  return request(`${BACKEND_URL}/api/parse-url`, {
+    method: 'POST',
+    body: JSON.stringify({ url }),
+  })
+}
+
+// Wish Lists
+export async function getMyLists() {
+  const userId = getUserId()
+  return directus(`/items/wish_lists?filter[owner_id][_eq]=${userId}&sort[]=-date_created`)
+}
+
+export async function createList(payload) {
+  return directus('/items/wish_lists', { method: 'POST', body: JSON.stringify({ ...payload, owner_id: getUserId() }) })
+}
+
+export async function updateList(id, payload) {
+  return directus(`/items/wish_lists/${id}`, { method: 'PATCH', body: JSON.stringify(payload) })
+}
+
+export async function deleteList(id) {
+  return directus(`/items/wish_lists/${id}`, { method: 'DELETE' })
+}
+
+// Wish Items
+export async function getListItems(wishlistId) {
+  return directus(`/items/wish_items?filter[wishlist_id][_eq]=${wishlistId}&sort[]=-date_created`)
+}
+
+export async function createItem(payload) {
+  return directus('/items/wish_items', { method: 'POST', body: JSON.stringify(payload) })
+}
+
+export async function updateItem(id, payload) {
+  return directus(`/items/wish_items/${id}`, { method: 'PATCH', body: JSON.stringify(payload) })
+}
+
+export async function deleteItem(id) {
+  return directus(`/items/wish_items/${id}`, { method: 'DELETE' })
+}
+
+export async function reserveItem(itemId) {
+  await directus('/items/reservations', {
+    method: 'POST',
+    body: JSON.stringify({ item_id: itemId, reserved_by: getUserId() }),
+  })
+  return updateItem(itemId, { status: 'reserved' })
+}
+
+export async function cancelReservation(itemId, reservationId) {
+  await directus(`/items/reservations/${reservationId}`, { method: 'DELETE' })
+  return updateItem(itemId, { status: 'available' })
+}
+
+// Friends
+export async function getFriends() {
+  return directus(`/items/friendships?filter[user_id][_eq]=${getUserId()}`)
+}
+
+export async function addFriend(friendId) {
+  return directus('/items/friendships', {
+    method: 'POST',
+    body: JSON.stringify({ user_id: getUserId(), friend_id: friendId }),
+  })
+}
+
+// Events
+export async function getMyEvents() {
+  return directus(`/items/events?filter[owner_id][_eq]=${getUserId()}&sort[]=event_date`)
+}
+
+export async function createEvent(payload) {
+  return directus('/items/events', {
+    method: 'POST',
+    body: JSON.stringify({ ...payload, owner_id: getUserId() }),
+  })
+}
+
+// Users
+export async function getMe() {
+  return directus(`/items/users/${getUserId()}`)
+}
+
+export async function updateMe(payload) {
+  return directus(`/items/users/${getUserId()}`, { method: 'PATCH', body: JSON.stringify(payload) })
+}
+
+export async function searchUsers(username) {
+  return directus(`/items/users?filter[username][_icontains]=${username}&limit=10`)
+}
+
+// Catalog
+export async function getCatalog() {
+  return directus('/items/catalog_items?sort[]=sort_order&limit=20')
+}
