@@ -1,36 +1,49 @@
 import { useEffect, useState } from 'react'
 import { loginTelegram } from '../api/client'
 
-export default function Login({ onLogin, tgReady }) {
+export default function Login({ onLogin }) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
   const [loginReady, setLoginReady] = useState(false)
 
   useEffect(() => {
-    if (!tgReady) return
+    // Спочатку перевіряємо Mini App через URL параметри
+    const isMiniApp = window.location.search.includes('tgWebAppData') ||
+      navigator.userAgent.toLowerCase().includes('telegram')
 
-    // Якщо Mini App — автологін
-    if (window.Telegram?.WebApp?.initData) {
-      setLoading(true)
-      loginTelegram(window.Telegram.WebApp.initData)
-        .then(() => onLogin())
-        .catch(e => { setError(e.message); setLoading(false) })
+    if (isMiniApp) {
+      // Підключаємо WebApp SDK тільки для Mini App
+      const tgScript = document.createElement('script')
+      tgScript.src = 'https://telegram.org/js/telegram-web-app.js'
+      tgScript.async = true
+      tgScript.onload = () => {
+        const initData = window.Telegram?.WebApp?.initData
+        if (initData) {
+          window.Telegram.WebApp.ready()
+          window.Telegram.WebApp.expand()
+          setLoading(true)
+          loginTelegram(initData)
+            .then(() => onLogin())
+            .catch(e => { setError(e.message); setLoading(false) })
+        }
+      }
+      document.head.appendChild(tgScript)
       return
     }
 
-    // Браузер — підключаємо новий Telegram Login
+    // Браузер — новий Telegram Login (без WebApp SDK)
     const script = document.createElement('script')
     script.src = 'https://telegram.org/js/telegram-login.js'
     script.async = true
     script.onload = () => {
       if (window.Telegram?.Login) {
         window.Telegram.Login.init(
-          { 
-            client_id: 8624605092, 
-            request_access: ['write'], 
-            bot_id: 8624605092,
+          {
+            client_id: 8624605092,
+            request_access: ['write'],
           },
           async (data) => {
+            console.log('Telegram Login data:', data)
             if (data.error) { setError('Помилка: ' + data.error); return }
             setLoading(true)
             try {
@@ -58,7 +71,7 @@ export default function Login({ onLogin, tgReady }) {
       }
     }
     document.head.appendChild(script)
-  }, [tgReady])
+  }, [])
 
   if (loading) {
     return (
