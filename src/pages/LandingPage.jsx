@@ -1,9 +1,9 @@
-import { useEffect, useRef, useCallback } from 'react'
+import { useEffect, useState } from 'react'
 import Footer from '../components/Footer'
-import { loginTelegramOIDC } from '../api/client'
+import { loginTelegramOIDC, loginTelegram } from '../api/client'
 
-const BOT_USERNAME = 'Wishlle_bot'
-const CLIENT_ID    = '8624605092'
+const CLIENT_ID   = '8624605092'
+const ORIGIN      = 'https://wishlle-4isp.vercel.app'
 
 const features = [
   { icon: '🎁', title: 'Вішліст',     text: 'Додавай бажані речі, ділись списком з близькими одним посиланням.' },
@@ -11,69 +11,121 @@ const features = [
   { icon: '🗓️', title: 'Нагадування', text: 'Всі важливі дати в одному місці. Telegram-бот нагадає за 7, 3 і 1 день.' },
 ]
 
-// Вставляє Telegram Login Widget в переданий DOM-вузол
-function injectTgWidget(container, callbackName) {
-  if (!container) return
-  container.innerHTML = ''
-  const s = document.createElement('script')
-  s.src = 'https://telegram.org/js/telegram-login.js'
-  s.setAttribute('data-telegram-login',  BOT_USERNAME)
-  s.setAttribute('data-client-id',       CLIENT_ID)
-  s.setAttribute('data-size',            'large')
-  s.setAttribute('data-onauth',          `${callbackName}(user)`)
-  s.setAttribute('data-request-access',  'write')
-  s.setAttribute('data-userpic',         'false')
-  container.appendChild(s)
+function TgLoginButton({ onLogin, label = 'Увійти через Telegram' }) {
+  const [loading, setLoading] = useState(false)
+  const [error, setError]     = useState(null)
+
+  function openPopup() {
+    setError(null)
+    const w = 550, h = 600
+    const left = window.screenX + (window.outerWidth  - w) / 2
+    const top  = window.screenY + (window.outerHeight - h) / 2
+
+    const url = `https://oauth.telegram.org/auth?bot_id=${CLIENT_ID}&origin=${encodeURIComponent(ORIGIN)}&embed=1&request_access=write&return_to=${encodeURIComponent(ORIGIN)}`
+
+    const popup = window.open(url, 'TelegramAuth', `width=${w},height=${h},left=${left},top=${top},toolbar=0,scrollbars=0,status=0,resizable=0,location=0,menuBar=0`)
+
+    if (!popup) {
+      setError('Браузер заблокував popup. Дозволь попапи для цього сайту.')
+      return
+    }
+
+    setLoading(true)
+
+    // Слухаємо повідомлення від popup
+    function onMessage(e) {
+      if (e.origin !== 'https://oauth.telegram.org') return
+      const data = typeof e.data === 'string' ? JSON.parse(e.data) : e.data
+      if (!data) return
+
+      window.removeEventListener('message', onMessage)
+      clearInterval(timer)
+      popup.close()
+
+      handleAuthData(data)
+    }
+
+    window.addEventListener('message', onMessage)
+
+    // Запасний варіант — перевіряємо чи popup не закрився сам
+    const timer = setInterval(() => {
+      if (popup.closed) {
+        clearInterval(timer)
+        window.removeEventListener('message', onMessage)
+        setLoading(false)
+      }
+    }, 500)
+  }
+
+  async function handleAuthData(data) {
+    try {
+      if (data.event === 'auth_result') {
+        const user = data.result
+        if (!user) throw new Error('Авторизацію скасовано')
+
+        if (user.id_token) {
+          await loginTelegramOIDC(user.id_token)
+        } else {
+          // Старий формат — hash
+          const { hash, auth_date, ...fields } = user
+          const p = new URLSearchParams()
+          p.set('user',      JSON.stringify(fields))
+          p.set('auth_date', String(auth_date))
+          p.set('hash',      hash)
+          await loginTelegram(p.toString())
+        }
+        onLogin()
+      }
+    } catch (e) {
+      setError(e.message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
+      <button
+        onClick={openPopup}
+        disabled={loading}
+        style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12,
+          padding: '14px 32px',
+          background: '#229ED9', color: '#fff',
+          border: 'none', borderRadius: 14,
+          fontFamily: 'Nunito, sans-serif', fontSize: '1rem', fontWeight: 800,
+          cursor: loading ? 'wait' : 'pointer',
+          opacity: loading ? 0.7 : 1,
+          transition: 'all 0.2s',
+          boxShadow: '0 4px 20px rgba(34,158,217,0.35)',
+          minWidth: 240,
+        }}
+        onMouseEnter={e => { if (!loading) e.currentTarget.style.transform = 'translateY(-2px)' }}
+        onMouseLeave={e => { e.currentTarget.style.transform = '' }}
+      >
+        {loading ? (
+          '⏳ Авторизація...'
+        ) : (
+          <>
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="white">
+              <path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.894 8.221l-1.97 9.28c-.145.658-.537.818-1.084.508l-3-2.21-1.447 1.394c-.16.16-.295.295-.605.295l.213-3.053 5.56-5.023c.242-.213-.054-.333-.373-.12L8.32 13.617l-2.96-.924c-.643-.204-.657-.643.136-.953l11.57-4.461c.537-.194 1.006.131.828.942z"/>
+            </svg>
+            {label}
+          </>
+        )}
+      </button>
+      {error && (
+        <p style={{ color: '#ff4d4d', fontSize: '0.82rem', textAlign: 'center', maxWidth: 300 }}>{error}</p>
+      )}
+    </div>
+  )
 }
 
 export default function LandingPage({ onLogin }) {
-  const heroRef = useRef(null)
-  const ctaRef  = useRef(null)
-
-  const handleAuth = useCallback(async (user) => {
-    if (!user?.id_token && !user?.hash) return
-    try {
-      if (user.id_token) {
-        await loginTelegramOIDC(user.id_token)
-      } else {
-        // fallback: старий формат hash
-        const { hash, auth_date, ...userFields } = user
-        const p = new URLSearchParams()
-        p.set('user',      JSON.stringify(userFields))
-        p.set('auth_date', String(auth_date))
-        p.set('hash',      hash)
-        const { loginTelegram } = await import('../api/client')
-        await loginTelegram(p.toString())
-      }
-      onLogin()
-    } catch (e) {
-      console.error('Auth error:', e)
-      alert('Помилка авторизації: ' + e.message)
-    }
-  }, [onLogin])
-
-  useEffect(() => {
-    // Реєструємо глобальні callback-и
-    window.__tgHero = (user) => handleAuth(user)
-    window.__tgCta  = (user) => handleAuth(user)
-
-    // Чекаємо наступний тік щоб refs точно були в DOM
-    const t = setTimeout(() => {
-      injectTgWidget(heroRef.current, '__tgHero')
-      injectTgWidget(ctaRef.current,  '__tgCta')
-    }, 0)
-
-    return () => {
-      clearTimeout(t)
-      delete window.__tgHero
-      delete window.__tgCta
-    }
-  }, [handleAuth])
-
   return (
     <div style={{ background: 'var(--bg)', minHeight: '100vh', color: 'var(--text)', fontFamily: "'Nunito', sans-serif" }}>
 
-      {/* ── NAVBAR ── */}
+      {/* NAVBAR */}
       <nav style={{
         position: 'fixed', top: 0, left: 0, right: 0, zIndex: 100,
         height: 64,
@@ -83,11 +135,10 @@ export default function LandingPage({ onLogin }) {
         padding: '0 40px',
       }}>
         <span style={{ fontFamily: "'Dancing Script', cursive", fontSize: '1.6rem', color: 'var(--cyan)' }}>Wishlle</span>
-        {/* Маленький виджет у navbar — окремий контейнер */}
-        <div id="tg-nav" style={{ transform: 'scale(0.82)', transformOrigin: 'right center' }} />
+        <TgLoginButton onLogin={onLogin} label="Увійти" />
       </nav>
 
-      {/* ── HERO ── */}
+      {/* HERO */}
       <section style={{
         minHeight: '100vh',
         display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
@@ -120,8 +171,7 @@ export default function LandingPage({ onLogin }) {
           Ніколи не забувай про важливі дати.
         </p>
 
-        {/* HERO кнопка */}
-        <div ref={heroRef} style={{ minHeight: 50, display: 'flex', alignItems: 'center', justifyContent: 'center' }} />
+        <TgLoginButton onLogin={onLogin} />
 
         <p style={{ fontSize: '0.78rem', color: 'var(--muted)' }}>
           Авторизація через Telegram — без паролів і реєстрації
@@ -136,20 +186,13 @@ export default function LandingPage({ onLogin }) {
         </div>
       </section>
 
-      {/* ── FEATURES ── */}
+      {/* FEATURES */}
       <section style={{ padding: '80px 24px', maxWidth: 1100, margin: '0 auto' }}>
-        <h2 style={{ textAlign: 'center', fontSize: '1.6rem', fontWeight: 900, marginBottom: 48 }}>
-          Все в одному місці
-        </h2>
+        <h2 style={{ textAlign: 'center', fontSize: '1.6rem', fontWeight: 900, marginBottom: 48 }}>Все в одному місці</h2>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 24 }}>
           {features.map(f => (
-            <div key={f.title} style={{
-              background: 'var(--surface)', border: '1px solid var(--border)',
-              borderRadius: 20, padding: '28px 24px',
-            }}>
-              <div style={{ width: 52, height: 52, borderRadius: 14, background: 'rgba(0,200,232,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.5rem', marginBottom: 16 }}>
-                {f.icon}
-              </div>
+            <div key={f.title} style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 20, padding: '28px 24px' }}>
+              <div style={{ width: 52, height: 52, borderRadius: 14, background: 'rgba(0,200,232,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.5rem', marginBottom: 16 }}>{f.icon}</div>
               <h3 style={{ fontWeight: 800, marginBottom: 8 }}>{f.title}</h3>
               <p style={{ color: 'var(--muted)', fontSize: '0.9rem', lineHeight: 1.6 }}>{f.text}</p>
             </div>
@@ -157,11 +200,11 @@ export default function LandingPage({ onLogin }) {
         </div>
       </section>
 
-      {/* ── CTA ── */}
+      {/* CTA */}
       <section style={{ padding: '80px 24px', textAlign: 'center', borderTop: '1px solid var(--border)' }}>
         <h2 style={{ fontSize: '1.8rem', fontWeight: 900, marginBottom: 12 }}>Готовий спробувати?</h2>
         <p style={{ color: 'var(--muted)', marginBottom: 32 }}>Приєднуйся через Telegram — займе 5 секунд.</p>
-        <div ref={ctaRef} style={{ display: 'flex', justifyContent: 'center', minHeight: 50 }} />
+        <TgLoginButton onLogin={onLogin} />
       </section>
 
       <div style={{ padding: '0 40px' }}><Footer /></div>

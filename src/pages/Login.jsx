@@ -1,86 +1,66 @@
-import { useEffect, useRef, useCallback, useState } from 'react'
+import { useState } from 'react'
 import { loginTelegramOIDC, loginTelegram } from '../api/client'
 
-const BOT_USERNAME = 'Wishlle_bot'
-const CLIENT_ID    = '8624605092'
+const CLIENT_ID = '8624605092'
+const ORIGIN    = 'https://wishlle-4isp.vercel.app'
 
 export default function Login({ onLogin }) {
-  const btnRef            = useRef(null)
   const [loading, setLoading] = useState(false)
   const [error, setError]     = useState(null)
 
-  const handleAuth = useCallback(async (user) => {
-    if (!user) return
-    setLoading(true)
+  function openPopup() {
     setError(null)
+
+    const url = `https://oauth.telegram.org/auth?bot_id=${CLIENT_ID}&origin=${encodeURIComponent(ORIGIN)}&embed=1&request_access=write&return_to=${encodeURIComponent(ORIGIN)}`
+    const w = 550, h = 600
+    const left = window.screenX + (window.outerWidth  - w) / 2
+    const top  = window.screenY + (window.outerHeight - h) / 2
+
+    const popup = window.open(url, 'TelegramAuth', `width=${w},height=${h},left=${left},top=${top},toolbar=0,scrollbars=0,status=0,resizable=0`)
+
+    if (!popup) { setError('Браузер заблокував popup. Дозволь попапи для цього сайту.'); return }
+
+    setLoading(true)
+
+    function onMessage(e) {
+      if (e.origin !== 'https://oauth.telegram.org') return
+      const data = typeof e.data === 'string' ? JSON.parse(e.data) : e.data
+      if (!data) return
+      window.removeEventListener('message', onMessage)
+      clearInterval(timer)
+      popup.close()
+      handleData(data)
+    }
+
+    window.addEventListener('message', onMessage)
+
+    const timer = setInterval(() => {
+      if (popup.closed) { clearInterval(timer); window.removeEventListener('message', onMessage); setLoading(false) }
+    }, 500)
+  }
+
+  async function handleData(data) {
     try {
-      if (user.id_token) {
-        await loginTelegramOIDC(user.id_token)
-      } else if (user.hash) {
-        const { hash, auth_date, ...userFields } = user
-        const p = new URLSearchParams()
-        p.set('user',      JSON.stringify(userFields))
-        p.set('auth_date', String(auth_date))
-        p.set('hash',      hash)
-        await loginTelegram(p.toString())
-      } else {
-        throw new Error('Не отримано даних авторизації')
+      if (data.event === 'auth_result') {
+        const user = data.result
+        if (!user) throw new Error('Авторизацію скасовано')
+        if (user.id_token) {
+          await loginTelegramOIDC(user.id_token)
+        } else {
+          const { hash, auth_date, ...fields } = user
+          const p = new URLSearchParams()
+          p.set('user', JSON.stringify(fields))
+          p.set('auth_date', String(auth_date))
+          p.set('hash', hash)
+          await loginTelegram(p.toString())
+        }
+        onLogin()
       }
-      onLogin()
     } catch (e) {
       setError(e.message)
       setLoading(false)
     }
-  }, [onLogin])
-
-  useEffect(() => {
-    // Mini App
-    const isMiniApp = window.location.search.includes('tgWebAppData') || navigator.userAgent.toLowerCase().includes('telegram')
-    if (isMiniApp) {
-      const s = document.createElement('script')
-      s.src = 'https://telegram.org/js/telegram-web-app.js'
-      s.async = true
-      s.onload = () => {
-        const initData = window.Telegram?.WebApp?.initData
-        if (initData) {
-          window.Telegram.WebApp.ready()
-          window.Telegram.WebApp.expand()
-          setLoading(true)
-          loginTelegram(initData).then(() => onLogin()).catch(e => { setError(e.message); setLoading(false) })
-        }
-      }
-      document.head.appendChild(s)
-      return
-    }
-
-    // Браузер
-    window.__tgLoginCb = (user) => handleAuth(user)
-
-    const t = setTimeout(() => {
-      if (!btnRef.current) return
-      btnRef.current.innerHTML = ''
-      const s = document.createElement('script')
-      s.src = 'https://telegram.org/js/telegram-login.js'
-      s.setAttribute('data-telegram-login',  BOT_USERNAME)
-      s.setAttribute('data-client-id',       CLIENT_ID)
-      s.setAttribute('data-size',            'large')
-      s.setAttribute('data-onauth',          '__tgLoginCb(user)')
-      s.setAttribute('data-request-access',  'write')
-      s.setAttribute('data-userpic',         'false')
-      btnRef.current.appendChild(s)
-    }, 0)
-
-    return () => { clearTimeout(t); delete window.__tgLoginCb }
-  }, [handleAuth])
-
-  if (loading) return (
-    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg)' }}>
-      <div style={{ textAlign: 'center' }}>
-        <div style={{ fontSize: '2.5rem', marginBottom: 16 }}>⏳</div>
-        <p style={{ color: 'var(--muted)' }}>Авторизація...</p>
-      </div>
-    </div>
-  )
+  }
 
   return (
     <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 28, padding: 24, background: 'var(--bg)' }}>
@@ -91,7 +71,26 @@ export default function Login({ onLogin }) {
         <p style={{ color: 'var(--muted)', fontSize: '1rem' }}>Зберігай мрії, діліться побажаннями</p>
       </div>
 
-      <div ref={btnRef} style={{ minHeight: 50, display: 'flex', alignItems: 'center', justifyContent: 'center' }} />
+      <button
+        onClick={openPopup}
+        disabled={loading}
+        style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12,
+          padding: '14px 32px',
+          background: '#229ED9', color: '#fff',
+          border: 'none', borderRadius: 14,
+          fontFamily: 'Nunito, sans-serif', fontSize: '1rem', fontWeight: 800,
+          cursor: loading ? 'wait' : 'pointer',
+          opacity: loading ? 0.7 : 1,
+          boxShadow: '0 4px 20px rgba(34,158,217,0.35)',
+          minWidth: 240,
+        }}
+      >
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="white">
+          <path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.894 8.221l-1.97 9.28c-.145.658-.537.818-1.084.508l-3-2.21-1.447 1.394c-.16.16-.295.295-.605.295l.213-3.053 5.56-5.023c.242-.213-.054-.333-.373-.12L8.32 13.617l-2.96-.924c-.643-.204-.657-.643.136-.953l11.57-4.461c.537-.194 1.006.131.828.942z"/>
+        </svg>
+        {loading ? '⏳ Авторизація...' : 'Увійти через Telegram'}
+      </button>
 
       {error && <p style={{ color: '#ff4d4d', fontSize: '0.9rem', textAlign: 'center', maxWidth: 280 }}>{error}</p>}
 
