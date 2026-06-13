@@ -1,129 +1,231 @@
-import { useState, useEffect } from 'react'
-import Footer from '../components/Footer'
-import { getMe, updateMe, logout } from '../api/client'
+import { useEffect, useMemo, useState } from 'react'
+import AppIcon from '../components/AppIcons'
+import { getMe, updateMe } from '../api/client'
+import s from './Account.module.css'
 
-function Toggle({ value, onChange }) {
-  return (
-    <div className={`toggle ${value ? 'on' : ''}`} onClick={() => onChange(!value)} />
-  )
+const EMPTY_FORM = {
+  display_name: '',
+  username: '',
+  birth_date: '',
+  avatar_url: '',
 }
 
-export default function Account({ onNav }) {
-  const [user, setUser]   = useState(null)
-  const [form, setForm]   = useState({ display_name: '', username: '', birth_date: '' })
+function initials(user) {
+  const value = user?.display_name || user?.username || 'W'
+  return value.split(/\s+/).filter(Boolean).map(part => part[0]).join('').slice(0, 2).toUpperCase()
+}
+
+function providerLabel(provider) {
+  if (provider === 'google') return 'Google'
+  if (provider === 'telegram') return 'Telegram'
+  return 'Wishlle'
+}
+
+export default function Account({ user: userFromApp, onUserUpdated, onLogout }) {
+  const [user, setUser] = useState(userFromApp || null)
+  const [form, setForm] = useState(EMPTY_FORM)
+  const [loading, setLoading] = useState(!userFromApp)
   const [saving, setSaving] = useState(false)
-  const [saved, setSaved]   = useState(false)
-  const [notifications, setNotifications] = useState({
-    birthdays: true, reservations: true, friends: true, events: false,
-  })
+  const [message, setMessage] = useState({ type: '', text: '' })
 
   useEffect(() => {
-    getMe().then(u => {
-      if (!u) return
-      setUser(u)
-      setForm({ display_name: u.display_name || '', username: u.username || '', birth_date: u.birth_date || '' })
-    }).catch(() => {})
-  }, [])
+    let cancelled = false
+    const applyUser = (value) => {
+      if (!value || cancelled) return
+      setUser(value)
+      setForm({
+        display_name: value.display_name || '',
+        username: value.username || '',
+        birth_date: value.birth_date || '',
+        avatar_url: value.avatar_url || '',
+      })
+    }
 
-  async function handleSave() {
+    if (userFromApp) applyUser(userFromApp)
+    else getMe().then(applyUser).finally(() => { if (!cancelled) setLoading(false) })
+
+    return () => { cancelled = true }
+  }, [userFromApp])
+
+  const progress = useMemo(() => {
+    const values = [form.display_name, form.username, form.birth_date, form.avatar_url]
+    return Math.round((values.filter(value => String(value || '').trim()).length / values.length) * 100)
+  }, [form])
+
+  const dirty = useMemo(() => {
+    if (!user) return false
+    return Object.keys(EMPTY_FORM).some(key => (form[key] || '') !== (user[key] || ''))
+  }, [form, user])
+
+  function changeField(key, value) {
+    setMessage({ type: '', text: '' })
+    setForm(current => ({ ...current, [key]: value }))
+  }
+
+  async function handleSave(event) {
+    event.preventDefault()
     setSaving(true)
+    setMessage({ type: '', text: '' })
+
     try {
-      await updateMe(form)
-      setSaved(true)
-      setTimeout(() => setSaved(false), 2200)
-    } catch (e) { alert('Помилка: ' + e.message) }
-    finally { setSaving(false) }
+      const payload = {
+        display_name: form.display_name.trim(),
+        username: form.username.trim(),
+        birth_date: form.birth_date || null,
+        avatar_url: form.avatar_url.trim() || null,
+      }
+      const updated = await updateMe(payload)
+      setUser(updated)
+      onUserUpdated?.(updated)
+      setMessage({ type: 'success', text: 'Профіль успішно оновлено.' })
+    } catch (error) {
+      setMessage({ type: 'error', text: error?.message || 'Не вдалося зберегти зміни.' })
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  function resetForm() {
+    if (!user) return
+    setForm({
+      display_name: user.display_name || '',
+      username: user.username || '',
+      birth_date: user.birth_date || '',
+      avatar_url: user.avatar_url || '',
+    })
+    setMessage({ type: '', text: '' })
+  }
+
+  if (loading) {
+    return (
+      <div className={s.page}>
+        <div className={s.loadingCard}><div className="auth-spinner" /><span>Завантажуємо профіль…</span></div>
+      </div>
+    )
   }
 
   return (
-    <div className="anim-fade-up">
-      <div className="wrap">
-        <div className="page-hero"><div><h1>Акаунт 👤</h1></div></div>
-
-        <div style={{ display: 'grid', gridTemplateColumns: '260px 1fr', gap: 20, paddingTop: 32 }} className="account-layout">
-          {/* Сайдбар */}
-          <div style={{ position: 'sticky', top: 84, alignSelf: 'start' }}>
-            <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 22, padding: 24, textAlign: 'center', marginBottom: 12 }}>
-              <div style={{ width: 72, height: 72, borderRadius: '50%', background: 'rgba(0,200,232,0.12)', border: '2.5px solid rgba(0,200,232,0.35)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '2rem', margin: '0 auto 12px', overflow: 'hidden' }}>
-                {user?.avatar_url
-                  ? <img src={user.avatar_url} alt="av" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                  : '😎'}
-              </div>
-              <div style={{ fontFamily: 'Dancing Script, cursive', fontSize: '1.4rem', marginBottom: 2 }}>
-                {user?.display_name || user?.username || '...'}
-              </div>
-              {user?.username && <div style={{ fontSize: '0.75rem', color: 'var(--muted)', marginBottom: 10 }}>@{user.username}</div>}
-              <div style={{ fontSize: '0.72rem', color: 'var(--muted)' }}>
-                {user?.auth_provider === 'telegram' ? '🔵 Telegram' : user?.auth_provider === 'google' ? '🔴 Google' : ''}
-              </div>
+    <div className={s.page}>
+      <div className={s.grid}>
+        <aside className={s.summaryCard}>
+          <div className={s.avatarWrap}>
+            <div className={s.avatar}>
+              {form.avatar_url
+                ? <img src={form.avatar_url} alt="Аватар" referrerPolicy="no-referrer" onError={(event) => { event.currentTarget.style.display = 'none' }} />
+                : <span>{initials({ ...user, ...form })}</span>}
             </div>
-
-            <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 18, padding: 8 }}>
-              <div onClick={logout}
-                style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '11px 14px', borderRadius: 11, fontSize: '0.84rem', fontWeight: 600, color: 'var(--red)', cursor: 'pointer' }}>
-                🚪 Вийти
-              </div>
-            </div>
+            <span className={s.onlineDot} title="Обліковий запис активний" />
           </div>
 
-          {/* Основне */}
-          <div>
-            {/* Особисті дані */}
-            <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 20, padding: 24, marginBottom: 14 }}>
-              <div style={{ fontSize: '0.68rem', fontWeight: 800, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 18 }}>Особиста інформація</div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 14 }}>
-                {[
-                  ["Ім'я та прізвище", 'display_name', 'text', 'Данило Молодорич'],
-                  ['Нікнейм',          'username',     'text', 'danioooooo'],
-                  ['Дата народження',   'birth_date',   'date', ''],
-                ].map(([label, key, type, placeholder]) => (
-                  <div key={key} style={key === 'birth_date' ? { gridColumn: '1/-1' } : {}}>
-                    <div style={{ fontSize: '0.68rem', fontWeight: 700, color: 'var(--muted)', marginBottom: 5 }}>{label}</div>
-                    <input type={type} value={form[key]} placeholder={placeholder}
-                      onChange={e => setForm(f => ({ ...f, [key]: e.target.value }))}
-                      style={{ width: '100%', background: 'var(--surface2)', border: '1px solid var(--border2)', borderRadius: 12, padding: '10px 14px', color: 'var(--text)', fontFamily: 'Nunito, sans-serif', fontSize: '0.86rem', outline: 'none' }} />
-                  </div>
-                ))}
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-                <button className="btn-primary" onClick={handleSave} disabled={saving} style={{ minWidth: 120 }}>
-                  {saving ? 'Зберігаємо...' : saved ? '✓ Збережено' : 'Зберегти'}
-                </button>
-              </div>
+          <h2>{form.display_name || form.username || 'Користувач Wishlle'}</h2>
+          {form.username && <p className={s.username}>@{form.username}</p>}
+
+          <span className={s.providerBadge}>
+            {user?.auth_provider === 'google' ? 'G' : user?.auth_provider === 'telegram' ? '➤' : 'W'}
+            Вхід через {providerLabel(user?.auth_provider)}
+          </span>
+
+          <div className={s.completion}>
+            <div className={s.completionRow}><span>Заповнення профілю</span><strong>{progress}%</strong></div>
+            <div className={s.progress}><span style={{ width: `${progress}%` }} /></div>
+            <p>{progress === 100 ? 'Усі основні дані заповнено.' : 'Заповнений профіль допомагає друзям швидше тебе знайти.'}</p>
+          </div>
+
+          <div className={s.summaryDivider} />
+          <div className={s.accountInfo}>
+            <div><span>ID користувача</span><strong>{user?.id || '—'}</strong></div>
+            <div><span>Спосіб входу</span><strong>{providerLabel(user?.auth_provider)}</strong></div>
+          </div>
+
+          <button type="button" className={s.logoutButton} onClick={onLogout}>
+            <AppIcon name="logout" size={18} /> Вийти з акаунта
+          </button>
+        </aside>
+
+        <section className={s.formCard}>
+          <div className={s.cardHeader}>
+            <div>
+              <span>Особиста інформація</span>
+              <h2>Налаштування профілю</h2>
+              <p>Ці дані використовуються у списках друзів, подіях та спільних побажаннях.</p>
+            </div>
+            <div className={s.headerIcon}><AppIcon name="profile" size={23} /></div>
+          </div>
+
+          <form onSubmit={handleSave}>
+            <div className={s.formGrid}>
+              <label className={s.field}>
+                <span>Ім’я та прізвище</span>
+                <input
+                  type="text"
+                  value={form.display_name}
+                  maxLength={100}
+                  placeholder="Наприклад, Даніл Молодорич"
+                  onChange={event => changeField('display_name', event.target.value)}
+                />
+                <small>Відображається друзям і учасникам подій.</small>
+              </label>
+
+              <label className={s.field}>
+                <span>Нікнейм</span>
+                <div className={s.inputPrefix}><b>@</b><input
+                  type="text"
+                  value={form.username}
+                  maxLength={50}
+                  placeholder="username"
+                  onChange={event => changeField('username', event.target.value.replace(/\s+/g, ''))}
+                /></div>
+                <small>За ним інші користувачі зможуть знайти тебе.</small>
+              </label>
+
+              <label className={s.field}>
+                <span>Дата народження</span>
+                <input
+                  type="date"
+                  value={form.birth_date}
+                  onChange={event => changeField('birth_date', event.target.value)}
+                />
+                <small>Використовується для нагадувань друзям.</small>
+              </label>
+
+              <label className={`${s.field} ${s.fullWidth}`}>
+                <span>Посилання на аватар</span>
+                <div className={s.inputPrefix}><b><AppIcon name="link" size={16} /></b><input
+                  type="url"
+                  value={form.avatar_url}
+                  placeholder="https://example.com/avatar.jpg"
+                  onChange={event => changeField('avatar_url', event.target.value)}
+                /></div>
+                <small>Фото з Telegram або Google вже підтягується автоматично. Тут його можна замінити.</small>
+              </label>
             </div>
 
-            {/* Сповіщення */}
-            <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 20, padding: 24, marginBottom: 14 }}>
-              <div style={{ fontSize: '0.68rem', fontWeight: 800, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 14 }}>Сповіщення Telegram</div>
-              {[
-                ['birthdays',    '🔔 Дні народження', 'За 1, 3 і 7 днів до події'],
-                ['reservations', '🎁 Резервування',   'Коли друг обрав твій товар'],
-                ['friends',      '👥 Нові друзі',     'Push та Telegram-повідомлення'],
-                ['events',       '📢 Активність',     'Нові учасники та зміни подій'],
-              ].map(([key, label, sub]) => (
-                <div key={key} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 0', borderBottom: '1px solid var(--border)' }}>
-                  <div>
-                    <div style={{ fontSize: '0.86rem', fontWeight: 600 }}>{label}</div>
-                    <div style={{ fontSize: '0.7rem', color: 'var(--muted)', marginTop: 1 }}>{sub}</div>
-                  </div>
-                  <Toggle value={notifications[key]} onChange={v => setNotifications(n => ({ ...n, [key]: v }))} />
-                </div>
-              ))}
-            </div>
+            {message.text && (
+              <div className={`${s.message} ${message.type === 'success' ? s.success : s.error}`}>
+                <AppIcon name={message.type === 'success' ? 'check' : 'close'} size={17} />
+                {message.text}
+              </div>
+            )}
 
-            {/* Небезпечна зона */}
-            <div style={{ background: 'var(--surface)', border: '1px solid rgba(240,91,91,0.2)', borderRadius: 20, padding: 24, marginBottom: 60 }}>
-              <div style={{ fontSize: '0.68rem', fontWeight: 800, color: 'var(--red)', textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 14 }}>Небезпечна зона</div>
-              <button onClick={logout}
-                style={{ width: '100%', background: 'rgba(240,91,91,0.07)', border: '1px solid rgba(240,91,91,0.2)', borderRadius: 12, padding: 12, color: 'var(--red)', fontFamily: 'Nunito, sans-serif', fontSize: '0.88rem', fontWeight: 700, cursor: 'pointer' }}>
-                🚪 Вийти з акаунту
+            <div className={s.formActions}>
+              <button type="button" className="btn-outline" disabled={!dirty || saving} onClick={resetForm}>Скасувати</button>
+              <button type="submit" className="btn-primary" disabled={!dirty || saving}>
+                <AppIcon name={saving ? 'sparkles' : 'check'} size={17} />
+                {saving ? 'Зберігаємо…' : 'Зберегти зміни'}
               </button>
             </div>
-          </div>
-        </div>
-        <Footer />
+          </form>
+        </section>
       </div>
-      <style>{`@media (max-width: 768px) { .account-layout { grid-template-columns: 1fr !important; } }`}</style>
+
+      <section className={s.securityCard}>
+        <div className={s.securityIcon}><AppIcon name="userCheck" size={22} /></div>
+        <div>
+          <h3>Авторизація без паролів</h3>
+          <p>Твій акаунт прив’язаний до {providerLabel(user?.auth_provider)}. Wishlle не зберігає пароль від Google або Telegram.</p>
+        </div>
+        <span className={s.secureBadge}>Захищено</span>
+      </section>
     </div>
   )
 }

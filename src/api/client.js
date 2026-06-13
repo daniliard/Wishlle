@@ -117,8 +117,9 @@ export async function updateMe(payload) {
     body: JSON.stringify(payload),
   })
   const current = getCachedUser() || {}
-  localStorage.setItem('wishlle_user', JSON.stringify({ ...current, ...payload }))
-  return updated
+  const merged = { ...current, ...payload, ...(updated || {}) }
+  localStorage.setItem('wishlle_user', JSON.stringify(merged))
+  return merged
 }
 
 // ── Parser ────────────────────────────────────────────────────────────────

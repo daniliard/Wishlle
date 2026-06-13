@@ -61,10 +61,10 @@ export default function Friends({ onNav }) {
   return (
     <div className="anim-fade-up">
       <div className="wrap">
-        <div className="page-hero">
+        <div className="content-toolbar content-toolbar--simple">
           <div>
-            <h1>Друзі 👥</h1>
-            <p>{friends.length} {friends.length === 1 ? 'друг' : 'друзів'}</p>
+            <strong>{friends.length} {friends.length === 1 ? 'друг' : 'друзів'}</strong>
+            <span>Шукай користувачів за нікнеймом і додавай до свого кола</span>
           </div>
         </div>
 

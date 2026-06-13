@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react'
-import Navbar from './components/Navbar'
-import BottomNav from './components/BottomNav'
+import AppShell from './components/AppShell'
 import Home from './pages/Home'
 import Lists from './pages/Lists'
 import Friends from './pages/Friends'
@@ -9,9 +8,9 @@ import Catalog from './pages/Catalog'
 import Account from './pages/Account'
 import LandingPage from './pages/LandingPage'
 import AuthCallback from './pages/AuthCallback'
-import { isLoggedIn, loginTelegram, logout } from './api/client'
+import { getMe, isLoggedIn, loginTelegram, logout } from './api/client'
 import { completeStoredBrowserLogin } from './auth/browserTelegram'
-import { getTelegramInitData, isTelegramMiniApp, looksLikeTelegramLaunch, telegramReady, waitForTelegramInitData } from './auth/telegram'
+import { isTelegramMiniApp, looksLikeTelegramLaunch, telegramReady, waitForTelegramInitData } from './auth/telegram'
 
 const PAGES = {
   home: Home,
@@ -31,8 +30,15 @@ export default function App() {
 
   const [page, setPage] = useState('home')
   const [auth, setAuth] = useState(() => isLoggedIn())
+  const [user, setUser] = useState(null)
   const [bootState, setBootState] = useState('checking')
   const [bootError, setBootError] = useState('')
+
+  const refreshUser = async () => {
+    const current = await getMe()
+    setUser(current || null)
+    return current
+  }
 
   useEffect(() => {
     if (isOAuthCallback) return
@@ -43,29 +49,29 @@ export default function App() {
       if (isLoggedIn()) {
         if (!cancelled) {
           setAuth(true)
+          await refreshUser()
           setBootState('ready')
         }
         return
       }
 
       try {
-        // Mini App: трохи чекаємо SDK і також підтримуємо tgWebAppData з URL hash.
-        // У цьому режимі popup ніколи не відкривається.
         const initData = await waitForTelegramInitData()
         if (initData) {
           telegramReady()
           await loginTelegram(initData)
           if (!cancelled) {
             setAuth(true)
+            await refreshUser()
             setBootState('ready')
           }
           return
         }
 
-        // Fallback для браузерів, які відкрили callback у цій же вкладці.
         const completed = await completeStoredBrowserLogin()
         if (completed && !cancelled) {
           setAuth(true)
+          await refreshUser()
         }
       } catch (error) {
         console.error('Wishlle auth boot failed:', error)
@@ -79,9 +85,12 @@ export default function App() {
     return () => { cancelled = true }
   }, [isOAuthCallback])
 
-  if (isOAuthCallback) {
-    return <AuthCallback />
-  }
+  useEffect(() => {
+    if (!auth || isOAuthCallback) return
+    refreshUser().catch(() => {})
+  }, [auth, isOAuthCallback])
+
+  if (isOAuthCallback) return <AuthCallback />
 
   if (bootState === 'checking') {
     return (
@@ -95,41 +104,50 @@ export default function App() {
   }
 
   if (!auth) {
-    return (
-      <>
-        {bootError && isTelegramMiniApp() ? (
-          <div className="auth-screen">
-            <div className="auth-screen__card auth-screen__card--error">
-              <h2>Не вдалося увійти</h2>
-              <p>{bootError}</p>
-              <button type="button" className="btn-primary" onClick={() => window.location.reload()}>
-                Спробувати ще раз
-              </button>
-            </div>
-          </div>
-        ) : (
-          <LandingPage onLogin={() => { setBootError(''); setAuth(true) }} />
-        )}
-      </>
+    return bootError && isTelegramMiniApp() ? (
+      <div className="auth-screen">
+        <div className="auth-screen__card auth-screen__card--error">
+          <h2>Не вдалося увійти</h2>
+          <p>{bootError}</p>
+          <button type="button" className="btn-primary" onClick={() => window.location.reload()}>
+            Спробувати ще раз
+          </button>
+        </div>
+      </div>
+    ) : (
+      <LandingPage
+        onLogin={async () => {
+          setBootError('')
+          setAuth(true)
+          await refreshUser().catch(() => {})
+        }}
+      />
     )
   }
 
   const PageComponent = PAGES[page] || Home
 
   return (
-    <>
-      <Navbar
-        current={page}
+    <AppShell
+      current={page}
+      onNav={setPage}
+      user={user}
+      onLogout={() => {
+        logout()
+        setUser(null)
+        setAuth(false)
+      }}
+    >
+      <PageComponent
         onNav={setPage}
+        user={user}
+        onUserUpdated={(updatedUser) => setUser(updatedUser)}
         onLogout={() => {
           logout()
+          setUser(null)
           setAuth(false)
         }}
       />
-      <div className="page-wrap">
-        <PageComponent onNav={setPage} />
-      </div>
-      <BottomNav current={page} onNav={setPage} />
-    </>
+    </AppShell>
   )
 }

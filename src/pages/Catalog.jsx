@@ -71,8 +71,11 @@ export default function Catalog({ onNav }) {
   return (
     <div className="anim-fade-up">
       <div className="wrap">
-        <div className="page-hero">
-          <div><h1>Каталог 🛍️</h1><p>Знайди ідею для подарунка</p></div>
+        <div className="content-toolbar content-toolbar--simple">
+          <div>
+            <strong>{products.length} товарів у каталозі</strong>
+            <span>Обери ідею та додай її до потрібного списку</span>
+          </div>
         </div>
 
         <div style={{ display: 'grid', gridTemplateColumns: '200px 1fr', gap: 24, paddingTop: 36 }} className="catalog-layout">

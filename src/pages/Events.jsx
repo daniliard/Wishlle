@@ -113,11 +113,12 @@ export default function Events() {
   return (
     <div className="anim-fade-up">
       <div className="wrap">
-        <div className="page-hero">
-          <div><h1>Події 🗓️</h1><p>{filtered.length} майбутніх подій</p></div>
-          <div className="page-hero-actions">
-            <button className="btn-primary" onClick={() => setShowModal(true)}>＋ Нова подія</button>
+        <div className="content-toolbar">
+          <div>
+            <strong>{filtered.length} майбутніх подій</strong>
+            <span>Дні народження, приватні та групові зустрічі</span>
           </div>
+          <button className="btn-primary" onClick={() => setShowModal(true)}>＋ Нова подія</button>
         </div>
 
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 300px', gap: 24, paddingTop: 36, alignItems: 'start' }} className="events-layout">

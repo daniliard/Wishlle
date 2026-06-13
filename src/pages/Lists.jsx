@@ -237,14 +237,12 @@ export default function Lists({ onNav }) {
   return (
     <div className="anim-fade-up">
       <div className="wrap">
-        <div className="page-hero">
+        <div className="content-toolbar">
           <div>
-            <h1>Мої списки 📋</h1>
-            <p>{lists.length} {lists.length === 1 ? 'список' : 'списків'} · {totalItems} бажань</p>
+            <strong>{lists.length} {lists.length === 1 ? 'список' : 'списків'}</strong>
+            <span>{totalItems} бажань у твоїй колекції</span>
           </div>
-          <div className="page-hero-actions">
-            <button className="btn-primary" onClick={() => { setEditingList(null); setShowListModal(true) }}>＋ Новий список</button>
-          </div>
+          <button className="btn-primary" onClick={() => { setEditingList(null); setShowListModal(true) }}>＋ Новий список</button>
         </div>
 
         {selectedList ? (
