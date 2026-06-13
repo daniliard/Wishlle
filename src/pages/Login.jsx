@@ -28,7 +28,7 @@ export default function Login({ onLogin, tgReady }) {
           { 
             client_id: 8624605092, 
             request_access: ['write'], 
-            redirect_uri: 'https://wishlle-4isp.vercel.app'
+            bot_id: 8624605092,
           },
           async (data) => {
             if (data.error) { setError('Помилка: ' + data.error); return }
