@@ -25,7 +25,11 @@ export default function Login({ onLogin, tgReady }) {
     script.onload = () => {
       if (window.Telegram?.Login) {
         window.Telegram.Login.init(
-          { client_id: 8624605092, request_access: ['write'] },
+          { 
+            client_id: 8624605092, 
+            request_access: ['write'], 
+            redirect_uri: 'https://wishlle-4isp.vercel.app'
+          },
           async (data) => {
             if (data.error) { setError('Помилка: ' + data.error); return }
             setLoading(true)
