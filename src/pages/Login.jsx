@@ -1,20 +1,22 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { loginTelegram } from '../api/client'
+
+const BOT_USERNAME = 'Wishlle_bot'   // без @
 
 export default function Login({ onLogin }) {
   const [loading, setLoading] = useState(false)
-  const [error, setError] = useState(null)
-  const [loginReady, setLoginReady] = useState(false)
+  const [error, setError]     = useState(null)
+  const btnRef                = useRef(null)
 
   useEffect(() => {
-    // Спочатку перевіряємо Mini App через URL параметри
-    const isMiniApp = window.location.search.includes('tgWebAppData') ||
+    // ── Telegram Mini App (відкрито всередині Telegram) ──────────────────
+    const isMiniApp =
+      window.location.search.includes('tgWebAppData') ||
       navigator.userAgent.toLowerCase().includes('telegram')
 
     if (isMiniApp) {
-      // Підключаємо WebApp SDK тільки для Mini App
       const tgScript = document.createElement('script')
-      tgScript.src = 'https://telegram.org/js/telegram-web-app.js'
+      tgScript.src   = 'https://telegram.org/js/telegram-web-app.js'
       tgScript.async = true
       tgScript.onload = () => {
         const initData = window.Telegram?.WebApp?.initData
@@ -31,88 +33,95 @@ export default function Login({ onLogin }) {
       return
     }
 
-    // Браузер — новий Telegram Login (без WebApp SDK)
-    const script = document.createElement('script')
-    script.src = 'https://telegram.org/js/telegram-login.js'
-    script.async = true
-    script.onload = () => {
-      if (window.Telegram?.Login) {
-        window.Telegram.Login.init(
-          {
-            client_id: 8624605092,
-            request_access: ['write'],
-            bot_id: 8624605092,
-          },
-          async (data) => {
-            console.log('Telegram Login data:', data)
-            if (data.error) { setError('Помилка: ' + data.error); return }
-            setLoading(true)
-            try {
-              const user = data.user
-              const params = new URLSearchParams()
-              params.set('user', JSON.stringify({
-                id: user.id,
-                first_name: user.name?.split(' ')[0] || '',
-                last_name: user.name?.split(' ').slice(1).join(' ') || '',
-                username: user.preferred_username || '',
-                photo_url: user.picture || '',
-                auth_date: user.iat || Math.floor(Date.now() / 1000),
-              }))
-              params.set('auth_date', String(user.iat || Math.floor(Date.now() / 1000)))
-              params.set('hash', data.id_token)
-              await loginTelegram(params.toString())
-              onLogin()
-            } catch (e) {
-              setError(e.message)
-              setLoading(false)
-            }
-          }
-        )
-        setLoginReady(true)
+    // ── Браузер: Telegram Login Widget ───────────────────────────────────
+    // Глобальний callback — викликається Telegram-скриптом після авторизації
+    window.__tgAuthCallback = async (user) => {
+      if (!user || !user.hash) {
+        setError('Авторизація скасована або невдала')
+        return
+      }
+      setLoading(true)
+      try {
+        // Будуємо init_data-рядок у форматі, який розуміє бекенд
+        const params = new URLSearchParams()
+        params.set('id',         String(user.id))
+        params.set('first_name', user.first_name || '')
+        if (user.last_name)  params.set('last_name',  user.last_name)
+        if (user.username)   params.set('username',   user.username)
+        if (user.photo_url)  params.set('photo_url',  user.photo_url)
+        params.set('auth_date',  String(user.auth_date))
+        params.set('hash',       user.hash)
+
+        // Пакуємо як user JSON + hash — бекенд verify_telegram_init_data
+        // очікує urlencoded рядок. Тому вкладаємо user-поля у поле "user"
+        const tgParams = new URLSearchParams()
+        const { hash, auth_date, ...userFields } = user
+        tgParams.set('user',      JSON.stringify(userFields))
+        tgParams.set('auth_date', String(auth_date))
+        tgParams.set('hash',      hash)
+
+        await loginTelegram(tgParams.toString())
+        onLogin()
+      } catch (e) {
+        setError(e.message)
+        setLoading(false)
       }
     }
-    document.head.appendChild(script)
+
+    // Вставляємо Telegram Login Widget-скрипт
+    if (btnRef.current) {
+      const s           = document.createElement('script')
+      s.async           = true
+      s.src             = 'https://telegram.org/js/telegram-widget.js?22'
+      s.setAttribute('data-telegram-login',  BOT_USERNAME)
+      s.setAttribute('data-size',            'large')
+      s.setAttribute('data-onauth',          '__tgAuthCallback(user)')
+      s.setAttribute('data-request-access',  'write')
+      btnRef.current.innerHTML = ''
+      btnRef.current.appendChild(s)
+    }
+
+    return () => {
+      delete window.__tgAuthCallback
+    }
   }, [])
 
   if (loading) {
     return (
       <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg)' }}>
         <div style={{ textAlign: 'center' }}>
-          <div style={{ fontSize: '2rem', marginBottom: 16 }}>⏳</div>
-          <p style={{ color: 'var(--text-muted)' }}>Авторизація...</p>
+          <div style={{ fontSize: '2.5rem', marginBottom: 16 }}>⏳</div>
+          <p style={{ color: 'var(--muted)' }}>Авторизація...</p>
         </div>
       </div>
     )
   }
 
   return (
-    <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 24, padding: 24, background: 'var(--bg)' }}>
+    <div style={{
+      minHeight: '100vh', display: 'flex', flexDirection: 'column',
+      alignItems: 'center', justifyContent: 'center',
+      gap: 28, padding: 24, background: 'var(--bg)',
+    }}>
       <div style={{ textAlign: 'center' }}>
-        <h1 style={{ fontSize: '2.5rem', fontWeight: 800, marginBottom: 8 }}>
+        <h1 style={{ fontFamily: "'Dancing Script', cursive", fontSize: '3.5rem', lineHeight: 1, marginBottom: 10 }}>
           Wish<span style={{ color: 'var(--cyan)' }}>lle</span>
         </h1>
-        <p style={{ color: 'var(--text-muted)', fontSize: '1rem' }}>
+        <p style={{ color: 'var(--muted)', fontSize: '1rem' }}>
           Зберігай мрії, діліться побажаннями
         </p>
       </div>
 
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12, width: '100%', maxWidth: 320 }}>
-        <button
-          className="btn-primary"
-          onClick={() => window.Telegram?.Login?.open()}
-          disabled={!loginReady}
-          style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, padding: '14px 24px', fontSize: '1rem', width: '100%' }}
-        >
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.894 8.221l-1.97 9.28c-.145.658-.537.818-1.084.508l-3-2.21-1.447 1.394c-.16.16-.295.295-.605.295l.213-3.053 5.56-5.023c.242-.213-.054-.333-.373-.12L8.32 13.617l-2.96-.924c-.643-.204-.657-.643.136-.953l11.57-4.461c.537-.194 1.006.131.828.942z"/>
-          </svg>
-          {loginReady ? 'Увійти через Telegram' : 'Завантаження...'}
-        </button>
-      </div>
+      {/* Telegram Login Widget рендериться всередині цього div */}
+      <div ref={btnRef} style={{ minHeight: 48, display: 'flex', alignItems: 'center', justifyContent: 'center' }} />
 
-      {error && <p style={{ color: '#ff4d4d', fontSize: '0.9rem', textAlign: 'center', maxWidth: 280 }}>{error}</p>}
+      {error && (
+        <p style={{ color: '#ff4d4d', fontSize: '0.9rem', textAlign: 'center', maxWidth: 280 }}>
+          {error}
+        </p>
+      )}
 
-      <p style={{ color: 'var(--text-muted)', fontSize: '0.8rem', textAlign: 'center', maxWidth: 280 }}>
+      <p style={{ color: 'var(--muted)', fontSize: '0.78rem', textAlign: 'center', maxWidth: 280 }}>
         Авторизація через Telegram — без паролів і реєстрації
       </p>
     </div>
