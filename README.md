@@ -1,82 +1,56 @@
-# Wishlle Frontend — Telegram authorization
+# Wishlle App 🎁
 
-React + Vite frontend з двома окремими сценаріями входу:
+Повноцінний адаптивний веб-застосунок для вішлістів на React + Vite.
 
-1. **Telegram Mini App** — автоматичний вхід через `Telegram.WebApp.initData`, без popup і без redirect.
-2. **Звичайний браузер** — OAuth/OIDC Authorization Code Flow з PKCE у popup-вікні. Після підтвердження в Telegram popup закривається, а сайт одразу відкриває головну сторінку.
-
-## Локальний запуск
+## Запуск
 
 ```bash
 npm install
-cp .env.example .env
 npm run dev
 ```
 
-Для локального тесту браузерного входу додай у BotFather окремі URL:
+Відкриється на **http://localhost:5173**
 
-- Redirect URI: `http://localhost:5173/auth/callback`
-- Trusted Origin: `http://localhost:5173`
+## Адаптивність
 
-і тимчасово задай у `.env`:
+| Пристрій | Поведінка |
+|----------|-----------|
+| Desktop (> 768px) | Топ-навігація з усіма розділами |
+| Mobile (≤ 768px) | Фіксована нижня навігація (Bottom Nav) |
 
-```env
-VITE_TG_REDIRECT_URI=http://localhost:5173/auth/callback
+## Сторінки
+
+| Сторінка | Файл |
+|----------|------|
+| Головна | `src/pages/Home.jsx` |
+| Мої списки | `src/pages/Lists.jsx` |
+| Друзі | `src/pages/Friends.jsx` |
+| Події | `src/pages/Events.jsx` |
+| Каталог | `src/pages/Catalog.jsx` |
+| Акаунт | `src/pages/Account.jsx` |
+
+## Компоненти
+
+- `Navbar` — фіксована верхня навігація (десктоп)
+- `BottomNav` — нижня навігація (тільки мобайл, `display:none` на десктопі)
+- `Footer` — футер
+
+## Структура
+
 ```
-
-## Налаштування Vercel
-
-У **Project → Settings → Environment Variables** додай:
-
-```env
-VITE_BACKEND_URL=https://wishllebackend-production.up.railway.app
-VITE_DIRECTUS_URL=https://directus-production-5c4b.up.railway.app
-VITE_TG_CLIENT_ID=8624605092
-VITE_TG_REDIRECT_URI=https://wishlle-4isp.vercel.app/auth/callback
+src/
+├── App.jsx
+├── main.jsx
+├── styles/global.css
+├── components/
+│   ├── Navbar.jsx + Navbar.module.css
+│   ├── BottomNav.jsx + BottomNav.module.css
+│   └── Footer.jsx
+└── pages/
+    ├── Home.jsx + Home.module.css
+    ├── Lists.jsx + Lists.module.css
+    ├── Friends.jsx
+    ├── Events.jsx
+    ├── Catalog.jsx
+    └── Account.jsx
 ```
-
-Після зміни змінних зроби новий deployment.
-
-`vercel.json` уже містить:
-
-- SPA rewrite на `index.html`;
-- `Cross-Origin-Opener-Policy: same-origin-allow-popups`, потрібний для зв'язку з Telegram popup.
-
-## Налаштування BotFather
-
-У **Bot Settings → Web Login** повинні бути окремо додані:
-
-- **Redirect URI:** `https://wishlle-4isp.vercel.app/auth/callback`
-- **Trusted Origin:** `https://wishlle-4isp.vercel.app`
-
-Важливо: URL має збігатися символ у символ. Redirect URI `/` зі скріншота недостатньо, якщо код використовує `/auth/callback`.
-
-## Налаштування Railway backend
-
-```env
-TELEGRAM_CLIENT_ID=8624605092
-TELEGRAM_CLIENT_SECRET=<секрет із BotFather>
-TELEGRAM_REDIRECT_URI=https://wishlle-4isp.vercel.app/auth/callback
-CORS_ORIGINS=["http://localhost:5173","https://wishlle-4isp.vercel.app"]
-```
-
-Client Secret ніколи не додавай у Vite/Vercel frontend-змінні — він має бути тільки на Railway.
-
-## Основні файли авторизації
-
-- `src/auth/telegram.js` — визначення Mini App і читання `initData`;
-- `src/auth/browserTelegram.js` — popup, PKCE, state, обмін коду через backend;
-- `src/pages/AuthCallback.jsx` — сторінка повернення з Telegram;
-- `src/App.jsx` — автоматичний Mini App login та відновлення browser login;
-- `src/pages/LandingPage.jsx` — кнопка входу в браузері.
-
-## Перевірка
-
-```bash
-npm run build
-```
-
-Після деплою перевір два сценарії:
-
-1. Відкрити Mini App кнопкою бота — головна сторінка повинна з'явитися без додаткового входу.
-2. Відкрити Vercel URL у Chrome — натиснути «Увійти через Telegram», підтвердити в popup, після чого popup закриється і відкриється головна сторінка.
