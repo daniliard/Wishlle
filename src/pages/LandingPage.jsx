@@ -1,9 +1,11 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Footer from '../components/Footer'
 import { generateCodeVerifier, generateCodeChallenge } from '../auth/pkce'
+import { loginTelegram } from '../api/client'
 
 const CLIENT_ID    = '8624605092'
 const REDIRECT_URI = 'https://wishlle-4isp.vercel.app/auth/callback'
+const BACKEND_URL  = 'https://wishllebackend-production.up.railway.app'
 
 const features = [
   { icon: '🎁', title: 'Вішліст',      text: 'Додавай бажані речі, ділись списком з близькими одним посиланням.' },
@@ -11,25 +13,48 @@ const features = [
   { icon: '🗓️', title: 'Нагадування',  text: 'Всі важливі дати в одному місці. Telegram-бот нагадає за 7, 3 і 1 день.' },
 ]
 
+// ── Обмін code → токен через бекенд ──────────────────────────────────────
+async function exchangeCode(code, verifier) {
+  const res = await fetch(`${BACKEND_URL}/api/auth/telegram/callback`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ code, code_verifier: verifier }),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    throw new Error(err.detail || `Помилка бекенду: ${res.status}`)
+  }
+  return res.json()
+}
+
+// ── Кнопка входу (браузер) ────────────────────────────────────────────────
 function TgButton({ onLogin, small = false }) {
   const [loading, setLoading] = useState(false)
   const [error, setError]     = useState(null)
+
+  async function handleLogin(code, verifier) {
+    const data = await exchangeCode(code, verifier)
+    localStorage.setItem('wishlle_token',   data.access_token)
+    localStorage.setItem('wishlle_user_id', data.user_id)
+    localStorage.setItem('wishlle_user',    JSON.stringify(data.user))
+    onLogin()
+  }
 
   async function handleClick() {
     setError(null)
     setLoading(true)
 
     try {
-      // 1. Генеруємо PKCE
-      const verifier   = generateCodeVerifier()
-      const challenge  = await generateCodeChallenge(verifier)
-      const state      = generateCodeVerifier() // random state для CSRF
+      const verifier  = generateCodeVerifier()
+      const challenge = await generateCodeChallenge(verifier)
+      const state     = generateCodeVerifier()
 
-      // Зберігаємо у sessionStorage — прочитаємо на /auth/callback
+      // Зберігаємо для двох варіантів: popup і redirect
       sessionStorage.setItem('tg_code_verifier', verifier)
       sessionStorage.setItem('tg_state', state)
+      // Чистимо старий результат
+      sessionStorage.removeItem('tg_auth_result')
 
-      // 2. Будуємо URL авторизації
       const url = new URL('https://oauth.telegram.org/auth')
       url.searchParams.set('client_id',             CLIENT_ID)
       url.searchParams.set('redirect_uri',          REDIRECT_URI)
@@ -39,7 +64,7 @@ function TgButton({ onLogin, small = false }) {
       url.searchParams.set('code_challenge',        challenge)
       url.searchParams.set('code_challenge_method', 'S256')
 
-      // 3. Відкриваємо popup
+      // Спробуємо popup
       const w = 550, h = 620
       const left = window.screenX + (window.outerWidth  - w) / 2
       const top  = window.screenY + (window.outerHeight - h) / 2
@@ -49,63 +74,61 @@ function TgButton({ onLogin, small = false }) {
         `width=${w},height=${h},left=${left},top=${top},toolbar=0,scrollbars=0,status=0`
       )
 
-      if (!popup) {
-        setError('Браузер заблокував popup. Дозволь спливаючі вікна для цього сайту.')
-        setLoading(false)
+      if (!popup || popup.closed) {
+        // Popup заблоковано — робимо звичайний redirect
+        window.location.href = url.toString()
         return
       }
 
-      // 4. Чекаємо поки popup редіректне на /auth/callback і закриється
-      //    Callback-сторінка зробить postMessage назад
-      const onMessage = async (e) => {
-        if (e.origin !== window.location.origin) return
-        if (e.data?.type !== 'tg_auth_code') return
-
+      // Слухаємо postMessage від AuthCallback
+      function onMessage(e) {
+        if (e.data?.type !== 'tg_auth_code' && e.data?.type !== 'tg_auth_error') return
         window.removeEventListener('message', onMessage)
         clearInterval(closedTimer)
 
-        const { code, returnedState } = e.data
+        if (e.data.type === 'tg_auth_error') {
+          setError('Telegram: ' + e.data.error)
+          setLoading(false)
+          return
+        }
 
+        const { code, returnedState } = e.data
         if (returnedState !== state) {
           setError('Помилка безпеки: невірний state')
           setLoading(false)
           return
         }
 
-        try {
-          // 5. Відправляємо code + verifier на бекенд
-          const res = await fetch(
-            'https://wishllebackend-production.up.railway.app/api/auth/telegram/callback',
-            {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ code, code_verifier: verifier }),
-            }
-          )
-          if (!res.ok) {
-            const err = await res.json()
-            throw new Error(err.detail || 'Помилка авторизації')
-          }
-          const data = await res.json()
-          localStorage.setItem('wishlle_token',   data.access_token)
-          localStorage.setItem('wishlle_user_id', data.user_id)
-          localStorage.setItem('wishlle_user',    JSON.stringify(data.user))
-          onLogin()
-        } catch (e) {
+        handleLogin(code, verifier).catch(e => {
           setError(e.message)
           setLoading(false)
-        }
+        })
       }
 
       window.addEventListener('message', onMessage)
 
-      // Якщо юзер просто закрив popup
+      // Запасний варіант: popup закрився без postMessage
+      // (може статись якщо COOP блокує opener)
       const closedTimer = setInterval(() => {
-        if (popup.closed) {
-          clearInterval(closedTimer)
-          window.removeEventListener('message', onMessage)
-          setLoading(false)
+        if (!popup.closed) return
+        clearInterval(closedTimer)
+        window.removeEventListener('message', onMessage)
+
+        // Перевіряємо sessionStorage — AuthCallback міг записати туди результат
+        const stored = sessionStorage.getItem('tg_auth_result')
+        if (stored) {
+          sessionStorage.removeItem('tg_auth_result')
+          try {
+            const result = JSON.parse(stored)
+            if (result.error) { setError('Telegram: ' + result.error); setLoading(false); return }
+            if (result.code && result.state === state) {
+              handleLogin(result.code, verifier).catch(e => { setError(e.message); setLoading(false) })
+              return
+            }
+          } catch {}
         }
+
+        setLoading(false)
       }, 500)
 
     } catch (e) {
@@ -150,7 +173,74 @@ function TgButton({ onLogin, small = false }) {
   )
 }
 
+// ── Головний компонент ────────────────────────────────────────────────────
 export default function LandingPage({ onLogin }) {
+  const [miniAppLoading, setMiniAppLoading] = useState(false)
+
+  useEffect(() => {
+    // ── Варіант 1: Telegram Mini App — логін через initData автоматично ──
+    const isMiniApp =
+      window.location.search.includes('tgWebAppData') ||
+      navigator.userAgent.toLowerCase().includes('telegram') ||
+      !!window.Telegram?.WebApp?.initData
+
+    if (isMiniApp) {
+      const script = document.createElement('script')
+      script.src = 'https://telegram.org/js/telegram-web-app.js'
+      script.onload = async () => {
+        const initData = window.Telegram?.WebApp?.initData
+        if (!initData) return
+        window.Telegram.WebApp.ready()
+        window.Telegram.WebApp.expand()
+        setMiniAppLoading(true)
+        try {
+          await loginTelegram(initData)
+          onLogin()
+        } catch (e) {
+          console.error('Mini App auth error:', e)
+          setMiniAppLoading(false)
+        }
+      }
+      document.head.appendChild(script)
+      return
+    }
+
+    // ── Варіант 2: повернення після redirect (коли popup був заблокований) ──
+    const stored = sessionStorage.getItem('tg_auth_result')
+    if (stored) {
+      sessionStorage.removeItem('tg_auth_result')
+      try {
+        const result   = JSON.parse(stored)
+        const verifier = sessionStorage.getItem('tg_code_verifier')
+        const state    = sessionStorage.getItem('tg_state')
+        if (result.code && result.state === state && verifier) {
+          sessionStorage.removeItem('tg_code_verifier')
+          sessionStorage.removeItem('tg_state')
+          setMiniAppLoading(true)
+          exchangeCode(result.code, verifier)
+            .then(data => {
+              localStorage.setItem('wishlle_token',   data.access_token)
+              localStorage.setItem('wishlle_user_id', data.user_id)
+              localStorage.setItem('wishlle_user',    JSON.stringify(data.user))
+              onLogin()
+            })
+            .catch(e => { console.error(e); setMiniAppLoading(false) })
+        }
+      } catch {}
+    }
+  }, [])
+
+  if (miniAppLoading) {
+    return (
+      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#0b1623' }}>
+        <div style={{ textAlign: 'center', color: '#eef4ff', fontFamily: 'Nunito, sans-serif' }}>
+          <div style={{ fontSize: '2.5rem', marginBottom: 16 }}>⏳</div>
+          <p style={{ color: 'rgba(255,255,255,0.42)' }}>Авторизація...</p>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div style={{ background: 'var(--bg)', minHeight: '100vh', color: 'var(--text)', fontFamily: "'Nunito', sans-serif" }}>
       <nav style={{

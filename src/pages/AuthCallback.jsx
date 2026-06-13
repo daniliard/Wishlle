@@ -1,25 +1,39 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 
 export default function AuthCallback() {
+  const [status, setStatus] = useState('Завершуємо авторизацію...')
+
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
-    const code  = params.get('code')
-    const state = params.get('state')
-    const error = params.get('error')
+    const code   = params.get('code')
+    const state  = params.get('state')
+    const error  = params.get('error')
 
     if (error) {
-      if (window.opener) {
-        window.opener.postMessage({ type: 'tg_auth_error', error }, window.location.origin)
-      }
-      window.close()
+      setStatus('Помилка: ' + error)
+      // Пробуємо postMessage, якщо opener є
+      try { window.opener?.postMessage({ type: 'tg_auth_error', error }, '*') } catch {}
+      // Якщо opener немає — зберігаємо в sessionStorage і редіректимо
+      sessionStorage.setItem('tg_auth_result', JSON.stringify({ error }))
+      setTimeout(() => { window.location.href = '/' }, 1500)
       return
     }
 
     if (code && state) {
-      if (window.opener) {
-        window.opener.postMessage({ type: 'tg_auth_code', code, returnedState: state }, window.location.origin)
+      setStatus('Авторизуємось...')
+
+      // Варіант 1: є opener (popup) → postMessage
+      if (window.opener && !window.opener.closed) {
+        try {
+          window.opener.postMessage({ type: 'tg_auth_code', code, returnedState: state }, '*')
+          window.close()
+          return
+        } catch {}
       }
-      window.close()
+
+      // Варіант 2: немає opener (redirect flow) → зберігаємо і йдемо на головну
+      sessionStorage.setItem('tg_auth_result', JSON.stringify({ code, state }))
+      window.location.href = '/'
     }
   }, [])
 
@@ -30,7 +44,7 @@ export default function AuthCallback() {
     }}>
       <div style={{ textAlign: 'center' }}>
         <div style={{ fontSize: '2rem', marginBottom: 12 }}>⏳</div>
-        <p style={{ color: 'rgba(255,255,255,0.4)' }}>Завершуємо авторизацію...</p>
+        <p style={{ color: 'rgba(255,255,255,0.42)' }}>{status}</p>
       </div>
     </div>
   )
