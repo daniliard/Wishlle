@@ -1,56 +1,52 @@
 import { useEffect, useState } from 'react'
+import { publishAuthResult } from '../auth/browserTelegram'
 
 export default function AuthCallback() {
-  const [status, setStatus] = useState('Завершуємо вхід...')
+  const [status, setStatus] = useState('Завершуємо вхід…')
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
-    const code   = params.get('code')
-    const state  = params.get('state')
-    const error  = params.get('error')
+    const payload = {
+      code: params.get('code'),
+      state: params.get('state'),
+      error: params.get('error'),
+      error_description: params.get('error_description'),
+    }
 
-    // Чи це вікно — popup? (відкрите через window.open з нашого сайту)
-    const hasOpener = !!window.opener && window.opener !== window
-
-    if (error) {
-      setStatus('Помилка: ' + error)
-      if (hasOpener) {
-        try { window.opener.postMessage({ type: 'tg_auth_error', error }, '*') } catch {}
-      }
-      sessionStorage.setItem('tg_auth_result', JSON.stringify({ error }))
-      setTimeout(() => { if (hasOpener) window.close(); else window.location.replace('/') }, 800)
+    if (!payload.code && !payload.error) {
+      setStatus('Telegram не повернув дані авторизації.')
+      setTimeout(() => window.location.replace('/'), 1200)
       return
     }
 
-    if (code && state) {
-      // Завжди пишемо результат в sessionStorage — це спільне сховище вкладок одного origin
-      sessionStorage.setItem('tg_auth_result', JSON.stringify({ code, state }))
+    publishAuthResult(payload)
 
-      // Якщо popup — повідомляємо батьківське вікно і закриваємось
-      if (hasOpener) {
-        try { window.opener.postMessage({ type: 'tg_auth_code', code, returnedState: state }, '*') } catch {}
-        setStatus('Готово! Закриваємо вікно...')
-        setTimeout(() => window.close(), 300)
-        return
+    const message = { type: 'wishlle_tg_auth_result', payload }
+    const hasOpener = Boolean(window.opener && window.opener !== window)
+
+    if (hasOpener) {
+      try {
+        window.opener.postMessage(message, window.location.origin)
+      } catch {
+        // localStorage/BroadcastChannel нижче залишаються fallback-механізмами.
       }
 
-      // Якщо це не popup (повний redirect) — йдемо на головну, App там підхопить
-      setStatus('Авторизуємось...')
-      window.location.replace('/')
-    } else {
-      setStatus('Невірний запит авторизації')
-      setTimeout(() => window.location.replace('/'), 1000)
+      setStatus(payload.error ? 'Вхід скасовано.' : 'Готово! Закриваємо вікно…')
+      setTimeout(() => window.close(), 350)
+      return
     }
+
+    // Якщо popup був перетворений браузером на звичайну вкладку або Telegram
+    // повернув користувача в цю ж вкладку, головний App підхопить результат.
+    setStatus(payload.error ? 'Вхід скасовано.' : 'Авторизуємось…')
+    setTimeout(() => window.location.replace('/'), 250)
   }, [])
 
   return (
-    <div style={{
-      minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center',
-      background: '#0b1623', color: '#eef4ff', fontFamily: 'Nunito, sans-serif',
-    }}>
-      <div style={{ textAlign: 'center' }}>
-        <div style={{ fontSize: '2rem', marginBottom: 12 }}>⏳</div>
-        <p style={{ color: 'rgba(255,255,255,0.42)' }}>{status}</p>
+    <div className="auth-screen">
+      <div className="auth-screen__card">
+        <div className="auth-spinner" aria-hidden="true" />
+        <p>{status}</p>
       </div>
     </div>
   )
