@@ -3,7 +3,7 @@ import { loginTelegramOIDC } from '../api/client'
 
 // Bot's Client ID — отримати в BotFather → Bot Settings → Web Login
 // Це НЕ bot_id, а окремий client_id (зазвичай збігається з bot_id, але треба перевірити)
-const TG_CLIENT_ID = import.meta.env.VITE_TG_CLIENT_ID
+const TG_CLIENT_ID = import.meta.env.VITE_TG_CLIENT_ID || "8624605092"
 
 export default function Login({ onLogin }) {
   const [loading, setLoading] = useState(false)

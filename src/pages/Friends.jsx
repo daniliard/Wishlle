@@ -1,74 +1,161 @@
-// ── FRIENDS ──
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Footer from '../components/Footer'
+import { getFriends, addFriend, searchUsers, getUserId } from '../api/client'
 
-const requests = [
-  { av: '👩', name: 'Діана Сонячна',  user: '@diana_s · 12 спільних' },
-  { av: '👨', name: 'Іван Мороз',      user: '@ivan_m · 3 спільних' },
-]
+export default function Friends({ onNav }) {
+  const [friends, setFriends]   = useState([])
+  const [search, setSearch]     = useState('')
+  const [results, setResults]   = useState([])
+  const [searching, setSearching] = useState(false)
+  const [loading, setLoading]   = useState(true)
+  const [adding, setAdding]     = useState(null)
+  const myId = getUserId()
 
-const friends = [
-  { av: '👩', name: 'Еліна Сонячна',   user: '@elina_s',  wishes: 31, bday: '24 серп. — завтра 🔥', soon: true },
-  { av: '👨', name: 'Андрій Пинько',   user: '@andriy_p', wishes: 47, bday: '29 серп. — 6 днів',    soon: true },
-  { av: '👩', name: 'Олена Карнавал',  user: '@olena_k',  wishes: 23, bday: '7 квіт. — 226 днів',   soon: false },
-  { av: '👨', name: 'Кирило Власенко', user: '@kyrylo_v', wishes: 18, bday: '15 грудня',             soon: false },
-  { av: '👩', name: 'Марія Кравець',   user: '@maria_k',  wishes: 12, bday: '3 лютого',              soon: false },
-  { av: '👨', name: 'Денис Орлов',     user: '@denys_o',  wishes: 9,  bday: '22 вересня',            soon: false },
-]
+  useEffect(() => { loadFriends() }, [])
 
-export function Friends() {
-  const [search, setSearch] = useState('')
-  const filtered = friends.filter(f => f.name.toLowerCase().includes(search.toLowerCase()))
+  async function loadFriends() {
+    setLoading(true)
+    try {
+      const data = await getFriends()
+      setFriends(Array.isArray(data) ? data : [])
+    } catch { setFriends([]) }
+    finally { setLoading(false) }
+  }
+
+  useEffect(() => {
+    if (!search.trim()) { setResults([]); return }
+    const timer = setTimeout(async () => {
+      setSearching(true)
+      try {
+        const data = await searchUsers(search.trim())
+        setResults(Array.isArray(data) ? data.filter(u => u.id !== myId) : [])
+      } catch { setResults([]) }
+      finally { setSearching(false) }
+    }, 400)
+    return () => clearTimeout(timer)
+  }, [search])
+
+  async function handleAdd(userId) {
+    setAdding(userId)
+    try {
+      await addFriend(userId)
+      loadFriends()
+      setSearch('')
+      setResults([])
+    } catch (e) { alert(e.message) }
+    finally { setAdding(null) }
+  }
+
+  function daysUntilBirthday(dateStr) {
+    if (!dateStr) return null
+    const today = new Date(); today.setHours(0,0,0,0)
+    const bday = new Date(dateStr)
+    bday.setFullYear(today.getFullYear())
+    bday.setHours(0,0,0,0)
+    if (bday < today) bday.setFullYear(today.getFullYear() + 1)
+    return Math.round((bday - today) / 86400000)
+  }
+
+  const friendIds = new Set(friends.map(f => f.friend_id))
+
   return (
     <div className="anim-fade-up">
       <div className="wrap">
         <div className="page-hero">
-          <div><h1>Друзі 👥</h1><p>8 друзів · 2 запити</p></div>
-          <div className="page-hero-actions"><button className="btn-primary">＋ Знайти друзів</button></div>
+          <div>
+            <h1>Друзі 👥</h1>
+            <p>{friends.length} {friends.length === 1 ? 'друг' : 'друзів'}</p>
+          </div>
         </div>
 
-        <div className="search-wrap" style={{ paddingTop: 28 }}>
-          <span className="s-icon">🔍</span>
-          <input type="text" placeholder="Знайти за юзернеймом..." value={search} onChange={e => setSearch(e.target.value)} />
-        </div>
+        {/* Пошук */}
+        <div style={{ paddingTop: 28, position: 'relative' }}>
+          <div className="search-wrap">
+            <span className="s-icon">🔍</span>
+            <input
+              type="text"
+              placeholder="Знайти за юзернеймом..."
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+            />
+          </div>
 
-        {/* Requests */}
-        <div className="section-header"><div className="section-title">Запити у друзі <span className="tag red" style={{marginLeft:8}}>2</span></div></div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 32 }}>
-          {requests.map(r => (
-            <div key={r.name} style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 16, padding: '14px 18px', display: 'flex', alignItems: 'center', gap: 14 }}>
-              <div style={{ width: 44, height: 44, borderRadius: '50%', background: 'rgba(0,200,232,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.2rem', flexShrink: 0 }}>{r.av}</div>
-              <div style={{ flex: 1 }}>
-                <div style={{ fontWeight: 800, fontSize: '0.9rem' }}>{r.name}</div>
-                <div style={{ fontSize: '0.72rem', color: 'var(--muted)', marginTop: 2 }}>{r.user}</div>
-              </div>
-              <div style={{ display: 'flex', gap: 8 }}>
-                <button className="btn-cyan" style={{ padding: '7px 14px', fontSize: '0.78rem' }}>✓ Прийняти</button>
-                <button className="btn-sm danger">✕</button>
-              </div>
+          {(results.length > 0 || searching) && (
+            <div style={{
+              position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 100,
+              background: '#0f1e2e', border: '1px solid var(--border2)',
+              borderRadius: 14, padding: 8, boxShadow: '0 20px 40px rgba(0,0,0,0.4)',
+            }}>
+              {searching && <div style={{ padding: '10px 14px', color: 'var(--muted)', fontSize: '0.85rem' }}>Шукаємо...</div>}
+              {results.map(u => (
+                <div key={u.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 12px', borderRadius: 10 }}>
+                  <div style={{ width: 38, height: 38, borderRadius: '50%', background: 'rgba(0,200,232,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1rem', overflow: 'hidden', flexShrink: 0 }}>
+                    {u.avatar_url ? <img src={u.avatar_url} style={{ width: '100%', height: '100%', objectFit: 'cover' }} alt="" /> : '👤'}
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontWeight: 700, fontSize: '0.88rem' }}>{u.display_name || u.username}</div>
+                    {u.username && <div style={{ fontSize: '0.72rem', color: 'var(--muted)' }}>@{u.username}</div>}
+                  </div>
+                  {friendIds.has(u.id) ? (
+                    <span className="tag green">Вже друг</span>
+                  ) : (
+                    <button className="btn-sm cyan" onClick={() => handleAdd(u.id)} disabled={adding === u.id}>
+                      {adding === u.id ? '...' : '＋ Додати'}
+                    </button>
+                  )}
+                </div>
+              ))}
+              {!searching && results.length === 0 && search.trim() && (
+                <div style={{ padding: '10px 14px', color: 'var(--muted)', fontSize: '0.85rem' }}>Нікого не знайдено</div>
+              )}
             </div>
-          ))}
+          )}
         </div>
 
-        {/* Friends grid */}
-        <div className="section-header"><div className="section-title">Мої друзі ({filtered.length})</div></div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 14, marginBottom: 60 }}>
-          {filtered.map(f => (
-            <div key={f.name} style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 20, padding: 20, textAlign: 'center', cursor: 'pointer', transition: 'all 0.25s' }}>
-              <div style={{ width: 60, height: 60, borderRadius: '50%', background: 'rgba(0,200,232,0.12)', border: '2px solid rgba(0,200,232,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.6rem', margin: '0 auto 10px' }}>{f.av}</div>
-              <div style={{ fontWeight: 800, fontSize: '0.92rem', marginBottom: 2 }}>{f.name}</div>
-              <div style={{ fontSize: '0.7rem', color: 'var(--muted)', marginBottom: 8 }}>{f.user}</div>
-              <div style={{ display: 'flex', justifyContent: 'center', gap: 20, marginBottom: 10 }}>
-                <div style={{ textAlign: 'center' }}><div style={{ fontWeight: 900, fontSize: '1rem', color: 'var(--cyan)' }}>{f.wishes}</div><div style={{ fontSize: '0.6rem', color: 'var(--muted)' }}>бажань</div></div>
-              </div>
-              <div style={{ fontSize: '0.7rem', color: f.soon ? 'var(--orange)' : 'var(--muted)', fontWeight: f.soon ? 700 : 400, marginBottom: 12 }}>🎂 {f.bday}</div>
-              <button className="btn-sm cyan" style={{ width: '100%' }}>Переглянути списки</button>
-            </div>
-          ))}
+        {/* Список друзів */}
+        <div className="section-header" style={{ paddingTop: 32 }}>
+          <div className="section-title">Мої друзі ({friends.length})</div>
         </div>
+
+        {loading ? (
+          <div style={{ textAlign: 'center', padding: '40px 0', color: 'var(--muted)' }}>Завантаження...</div>
+        ) : friends.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: '60px 0', color: 'var(--muted)' }}>
+            <div style={{ fontSize: '3rem', marginBottom: 12 }}>👥</div>
+            <div style={{ fontWeight: 700, marginBottom: 8 }}>Поки немає друзів</div>
+            <div style={{ fontSize: '0.85rem' }}>Знайди друзів за юзернеймом вище</div>
+          </div>
+        ) : (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(210px, 1fr))', gap: 14, marginBottom: 60 }}>
+            {friends.map(f => {
+              const u = f.friend || {}
+              const days = daysUntilBirthday(u.birth_date)
+              const soon = days !== null && days <= 7
+              return (
+                <div key={f.id} style={{
+                  background: 'var(--surface)', border: `1px solid ${soon ? 'rgba(247,162,57,0.3)' : 'var(--border)'}`,
+                  borderRadius: 20, padding: 20, textAlign: 'center',
+                  cursor: 'pointer', transition: 'all 0.25s',
+                }}>
+                  <div style={{ width: 60, height: 60, borderRadius: '50%', background: 'rgba(0,200,232,0.12)', border: '2px solid rgba(0,200,232,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.6rem', margin: '0 auto 10px', overflow: 'hidden' }}>
+                    {u.avatar_url ? <img src={u.avatar_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%' }} /> : '👤'}
+                  </div>
+                  <div style={{ fontWeight: 800, fontSize: '0.92rem', marginBottom: 2 }}>{u.display_name || u.username || 'Користувач'}</div>
+                  {u.username && <div style={{ fontSize: '0.7rem', color: 'var(--muted)', marginBottom: 8 }}>@{u.username}</div>}
+                  {days !== null && (
+                    <div style={{ fontSize: '0.7rem', color: soon ? 'var(--orange)' : 'var(--muted)', fontWeight: soon ? 700 : 400, marginBottom: 12 }}>
+                      🎂 {days === 0 ? 'Сьогодні! 🔥' : days === 1 ? 'Завтра 🔥' : `${days} днів`}
+                    </div>
+                  )}
+                  <button className="btn-sm cyan" style={{ width: '100%' }}>Переглянути списки →</button>
+                </div>
+              )
+            })}
+          </div>
+        )}
+
         <Footer />
       </div>
     </div>
   )
 }
-export default Friends

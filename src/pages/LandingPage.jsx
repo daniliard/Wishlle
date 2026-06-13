@@ -2,7 +2,7 @@ import { useRef, useEffect } from 'react'
 import Footer from '../components/Footer'
 import { loginTelegramOIDC } from '../api/client'
 
-const TG_CLIENT_ID = import.meta.env.VITE_TG_CLIENT_ID
+const TG_CLIENT_ID = import.meta.env.VITE_TG_CLIENT_ID || "8624605092"
 
 const features = [
   { icon: '🎁', title: 'Вішліст',         text: 'Додавай бажані речі, ділись списком з близькими одним посиланням.' },
