@@ -1,117 +1,99 @@
-import { useEffect, useRef, useState } from 'react'
-import { loginTelegramOIDC } from '../api/client'
+import { useEffect, useRef, useCallback, useState } from 'react'
+import { loginTelegramOIDC, loginTelegram } from '../api/client'
 
-// Bot's Client ID — отримати в BotFather → Bot Settings → Web Login
-// Це НЕ bot_id, а окремий client_id (зазвичай збігається з bot_id, але треба перевірити)
-const TG_CLIENT_ID = import.meta.env.VITE_TG_CLIENT_ID || "8624605092"
+const BOT_USERNAME = 'Wishlle_bot'
+const CLIENT_ID    = '8624605092'
 
 export default function Login({ onLogin }) {
+  const btnRef            = useRef(null)
   const [loading, setLoading] = useState(false)
   const [error, setError]     = useState(null)
-  const btnRef                = useRef(null)
+
+  const handleAuth = useCallback(async (user) => {
+    if (!user) return
+    setLoading(true)
+    setError(null)
+    try {
+      if (user.id_token) {
+        await loginTelegramOIDC(user.id_token)
+      } else if (user.hash) {
+        const { hash, auth_date, ...userFields } = user
+        const p = new URLSearchParams()
+        p.set('user',      JSON.stringify(userFields))
+        p.set('auth_date', String(auth_date))
+        p.set('hash',      hash)
+        await loginTelegram(p.toString())
+      } else {
+        throw new Error('Не отримано даних авторизації')
+      }
+      onLogin()
+    } catch (e) {
+      setError(e.message)
+      setLoading(false)
+    }
+  }, [onLogin])
 
   useEffect(() => {
-    // ── Telegram Mini App (відкрито всередині Telegram) ──────────────────
-    const isMiniApp =
-      window.location.search.includes('tgWebAppData') ||
-      navigator.userAgent.toLowerCase().includes('telegram')
-
+    // Mini App
+    const isMiniApp = window.location.search.includes('tgWebAppData') || navigator.userAgent.toLowerCase().includes('telegram')
     if (isMiniApp) {
-      const tgScript = document.createElement('script')
-      tgScript.src   = 'https://telegram.org/js/telegram-web-app.js'
-      tgScript.async = true
-      tgScript.onload = () => {
+      const s = document.createElement('script')
+      s.src = 'https://telegram.org/js/telegram-web-app.js'
+      s.async = true
+      s.onload = () => {
         const initData = window.Telegram?.WebApp?.initData
         if (initData) {
           window.Telegram.WebApp.ready()
           window.Telegram.WebApp.expand()
           setLoading(true)
-          // Mini App все ще використовує старий initData flow
-          import('../api/client').then(({ loginTelegram }) =>
-            loginTelegram(initData)
-              .then(() => onLogin())
-              .catch(e => { setError(e.message); setLoading(false) })
-          )
+          loginTelegram(initData).then(() => onLogin()).catch(e => { setError(e.message); setLoading(false) })
         }
       }
-      document.head.appendChild(tgScript)
+      document.head.appendChild(s)
       return
     }
 
-    // ── Браузер: новий Telegram Login (OIDC / telegram-login.js) ─────────
-    window.__tgAuthCallback = async (data) => {
-      if (data?.error) {
-        setError('Telegram: ' + data.error)
-        return
-      }
-      if (!data?.id_token) {
-        setError('Не отримано id_token від Telegram')
-        return
-      }
-      setLoading(true)
-      try {
-        await loginTelegramOIDC(data.id_token)
-        onLogin()
-      } catch (e) {
-        setError(e.message)
-        setLoading(false)
-      }
-    }
+    // Браузер
+    window.__tgLoginCb = (user) => handleAuth(user)
 
-    if (btnRef.current && TG_CLIENT_ID) {
-      const s = document.createElement('script')
-      s.async = true
-      s.src   = 'https://telegram.org/js/telegram-login.js'
-      s.setAttribute('data-telegram-login', TG_CLIENT_ID)
-      s.setAttribute('data-size',           'large')
-      s.setAttribute('data-onauth',         '__tgAuthCallback(user)')
-      s.setAttribute('data-request-access', 'write')
+    const t = setTimeout(() => {
+      if (!btnRef.current) return
       btnRef.current.innerHTML = ''
+      const s = document.createElement('script')
+      s.src = 'https://telegram.org/js/telegram-login.js'
+      s.setAttribute('data-telegram-login',  BOT_USERNAME)
+      s.setAttribute('data-client-id',       CLIENT_ID)
+      s.setAttribute('data-size',            'large')
+      s.setAttribute('data-onauth',          '__tgLoginCb(user)')
+      s.setAttribute('data-request-access',  'write')
+      s.setAttribute('data-userpic',         'false')
       btnRef.current.appendChild(s)
-    }
+    }, 0)
 
-    return () => { delete window.__tgAuthCallback }
-  }, [])
+    return () => { clearTimeout(t); delete window.__tgLoginCb }
+  }, [handleAuth])
 
-  if (loading) {
-    return (
-      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg)' }}>
-        <div style={{ textAlign: 'center' }}>
-          <div style={{ fontSize: '2.5rem', marginBottom: 16 }}>⏳</div>
-          <p style={{ color: 'var(--muted)' }}>Авторизація...</p>
-        </div>
+  if (loading) return (
+    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg)' }}>
+      <div style={{ textAlign: 'center' }}>
+        <div style={{ fontSize: '2.5rem', marginBottom: 16 }}>⏳</div>
+        <p style={{ color: 'var(--muted)' }}>Авторизація...</p>
       </div>
-    )
-  }
+    </div>
+  )
 
   return (
-    <div style={{
-      minHeight: '100vh', display: 'flex', flexDirection: 'column',
-      alignItems: 'center', justifyContent: 'center',
-      gap: 28, padding: 24, background: 'var(--bg)',
-    }}>
+    <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 28, padding: 24, background: 'var(--bg)' }}>
       <div style={{ textAlign: 'center' }}>
         <h1 style={{ fontFamily: "'Dancing Script', cursive", fontSize: '3.5rem', lineHeight: 1, marginBottom: 10 }}>
           Wish<span style={{ color: 'var(--cyan)' }}>lle</span>
         </h1>
-        <p style={{ color: 'var(--muted)', fontSize: '1rem' }}>
-          Зберігай мрії, діліться побажаннями
-        </p>
+        <p style={{ color: 'var(--muted)', fontSize: '1rem' }}>Зберігай мрії, діліться побажаннями</p>
       </div>
 
-      {!TG_CLIENT_ID && (
-        <p style={{ color: '#f7a239', fontSize: '0.85rem', textAlign: 'center', maxWidth: 300 }}>
-          ⚠️ VITE_TG_CLIENT_ID не задано в .env
-        </p>
-      )}
+      <div ref={btnRef} style={{ minHeight: 50, display: 'flex', alignItems: 'center', justifyContent: 'center' }} />
 
-      <div ref={btnRef} style={{ minHeight: 52, display: 'flex', alignItems: 'center', justifyContent: 'center' }} />
-
-      {error && (
-        <p style={{ color: '#ff4d4d', fontSize: '0.9rem', textAlign: 'center', maxWidth: 280 }}>
-          {error}
-        </p>
-      )}
+      {error && <p style={{ color: '#ff4d4d', fontSize: '0.9rem', textAlign: 'center', maxWidth: 280 }}>{error}</p>}
 
       <p style={{ color: 'var(--muted)', fontSize: '0.78rem', textAlign: 'center', maxWidth: 280 }}>
         Авторизація через Telegram — без паролів і реєстрації
