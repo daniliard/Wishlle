@@ -29,11 +29,36 @@ async function request(url, options = {}) {
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
     ...options.headers,
   }
-  const res = await fetch(url, { ...options, headers })
-  if (res.status === 401) { removeAuth(); window.location.reload(); return }
+
+  let res
+  try {
+    res = await fetch(url, { ...options, headers })
+  } catch (error) {
+    throw new Error('Не вдалося підключитися до бекенду. Перевір URL, CORS і стан Railway.')
+  }
+
   if (res.status === 204) return null
-  const data = await res.json()
-  if (!res.ok) throw new Error(data.detail || data.errors?.[0]?.message || `HTTP ${res.status}`)
+
+  const text = await res.text()
+  let data = {}
+  try {
+    data = text ? JSON.parse(text) : {}
+  } catch {
+    data = { detail: text }
+  }
+
+  if (!res.ok) {
+    // Не перезавантажуємо сторінку під час самого входу: інакше реальна
+    // помилка Telegram/Directus губиться, а popup виглядає як завислий.
+    if (res.status === 401 && token) removeAuth()
+
+    throw new Error(
+      data.detail ||
+      data.errors?.[0]?.message ||
+      `HTTP ${res.status}`,
+    )
+  }
+
   return data
 }
 

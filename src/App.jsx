@@ -23,13 +23,19 @@ const PAGES = {
 }
 
 export default function App() {
+  const authParams = new URLSearchParams(window.location.search)
+  const isOAuthCallback =
+    window.location.pathname === '/auth/callback' ||
+    authParams.has('code') ||
+    authParams.has('error')
+
   const [page, setPage] = useState('home')
   const [auth, setAuth] = useState(() => isLoggedIn())
   const [bootState, setBootState] = useState('checking')
   const [bootError, setBootError] = useState('')
 
   useEffect(() => {
-    if (window.location.pathname === '/auth/callback') return
+    if (isOAuthCallback) return
 
     let cancelled = false
 
@@ -71,9 +77,9 @@ export default function App() {
 
     boot()
     return () => { cancelled = true }
-  }, [])
+  }, [isOAuthCallback])
 
-  if (window.location.pathname === '/auth/callback') {
+  if (isOAuthCallback) {
     return <AuthCallback />
   }
 
