@@ -38,7 +38,7 @@ export default function Login({ onLogin }) {
 
   useEffect(() => {
     // Mini App — автологін
-    if (window.Telegram?.WebApp?.initData) {
+    if (window.Telegram?.WebApp?.initData && window.Telegram?.WebApp?.platform !== 'unknown') {
       setLoading(true)
       loginTelegram(window.Telegram.WebApp.initData)
         .then(() => onLogin())
