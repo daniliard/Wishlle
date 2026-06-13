@@ -1,4 +1,11 @@
-const BACKEND_URL  = import.meta.env.VITE_BACKEND_URL  || 'https://wishllebackend-production.up.railway.app'
+const CONFIGURED_BACKEND_URL = String(import.meta.env.VITE_BACKEND_URL || '').replace(/\/$/, '')
+
+// На Vercel ходимо до Railway через same-origin rewrite /backend.
+// Так авторизація не залежить від CORS і працює також на preview-доменах Vercel.
+const BACKEND_URL = import.meta.env.PROD
+  ? '/backend'
+  : (CONFIGURED_BACKEND_URL || 'http://localhost:8000')
+
 const DIRECTUS_URL = import.meta.env.VITE_DIRECTUS_URL || 'https://directus-production-5c4b.up.railway.app'
 
 export function getToken()      { return localStorage.getItem('wishlle_token') }
@@ -34,7 +41,8 @@ async function request(url, options = {}) {
   try {
     res = await fetch(url, { ...options, headers })
   } catch (error) {
-    throw new Error('Не вдалося підключитися до бекенду. Перевір URL, CORS і стан Railway.')
+    const reason = error instanceof Error ? error.message : String(error)
+    throw new Error(`Не вдалося виконати запит ${url}. Причина: ${reason}`)
   }
 
   if (res.status === 204) return null

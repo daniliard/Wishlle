@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import Footer from '../components/Footer'
 import { openTelegramLoginPopup } from '../auth/browserTelegram'
+import { looksLikeTelegramLaunch } from '../auth/telegram'
 
 const features = [
   { icon: '🎁', title: 'Вішліст', text: 'Додавай бажані речі та ділись списком з близькими одним посиланням.' },
@@ -18,6 +19,9 @@ function TelegramLoginButton({ onLogin, small = false }) {
     setLoading(true)
 
     try {
+      if (looksLikeTelegramLaunch()) {
+        throw new Error('Telegram відкрив сайт як звичайне посилання, без initData. Закрий сторінку та відкрий Wishlle кнопкою «Відкрити Wishlle» після команди /start або через налаштований Mini App.')
+      }
       await openTelegramLoginPopup()
       onLogin()
     } catch (authError) {

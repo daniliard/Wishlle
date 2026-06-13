@@ -11,7 +11,7 @@ import LandingPage from './pages/LandingPage'
 import AuthCallback from './pages/AuthCallback'
 import { isLoggedIn, loginTelegram, logout } from './api/client'
 import { completeStoredBrowserLogin } from './auth/browserTelegram'
-import { getTelegramInitData, isTelegramMiniApp, telegramReady } from './auth/telegram'
+import { getTelegramInitData, isTelegramMiniApp, looksLikeTelegramLaunch, telegramReady, waitForTelegramInitData } from './auth/telegram'
 
 const PAGES = {
   home: Home,
@@ -49,11 +49,11 @@ export default function App() {
       }
 
       try {
-        // Mini App: Telegram уже передав підписаний initData. Жодних popup або redirect.
-        if (isTelegramMiniApp()) {
+        // Mini App: трохи чекаємо SDK і також підтримуємо tgWebAppData з URL hash.
+        // У цьому режимі popup ніколи не відкривається.
+        const initData = await waitForTelegramInitData()
+        if (initData) {
           telegramReady()
-          const initData = getTelegramInitData()
-          if (!initData) throw new Error('Telegram не передав initData для Mini App.')
           await loginTelegram(initData)
           if (!cancelled) {
             setAuth(true)
@@ -88,7 +88,7 @@ export default function App() {
       <div className="auth-screen">
         <div className="auth-screen__card">
           <div className="auth-spinner" aria-hidden="true" />
-          <p>{isTelegramMiniApp() ? 'Входимо через Telegram…' : 'Завантажуємо Wishlle…'}</p>
+          <p>{isTelegramMiniApp() || looksLikeTelegramLaunch() ? 'Входимо через Telegram…' : 'Завантажуємо Wishlle…'}</p>
         </div>
       </div>
     )
