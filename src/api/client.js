@@ -3,15 +3,21 @@ const DIRECTUS_URL = import.meta.env.VITE_DIRECTUS_URL || 'https://directus-prod
 
 export function getToken() { return localStorage.getItem('wishlle_token') }
 export function getUserId() { return localStorage.getItem('wishlle_user_id') }
+export function getCachedUser() {
+  const u = localStorage.getItem('wishlle_user')
+  return u ? JSON.parse(u) : null
+}
 
-function setAuth(token, userId) {
+function setAuth(token, userId, user) {
   localStorage.setItem('wishlle_token', token)
   localStorage.setItem('wishlle_user_id', userId)
+  localStorage.setItem('wishlle_user', JSON.stringify(user))
 }
 
 export function removeAuth() {
   localStorage.removeItem('wishlle_token')
   localStorage.removeItem('wishlle_user_id')
+  localStorage.removeItem('wishlle_user')
 }
 
 export function isLoggedIn() { return !!getToken() }
@@ -42,7 +48,7 @@ export async function loginTelegram(initData) {
     method: 'POST',
     body: JSON.stringify({ init_data: initData }),
   })
-  setAuth(data.access_token, data.user_id)
+  setAuth(data.access_token, data.user_id, data.user)
   return data
 }
 
@@ -51,11 +57,28 @@ export async function loginGoogle(idToken) {
     method: 'POST',
     body: JSON.stringify({ id_token: idToken }),
   })
-  setAuth(data.access_token, data.user_id)
+  setAuth(data.access_token, data.user_id, data.user)
   return data
 }
 
 export function logout() { removeAuth(); window.location.reload() }
+
+// User — береться з кешу, або з Directus через адмін токен бекенду
+export async function getMe() {
+  return getCachedUser()
+}
+
+export async function updateMe(payload) {
+  const userId = getUserId()
+  const updated = await directus(`/items/users/${userId}`, {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
+  })
+  // Оновлюємо кеш
+  const current = getCachedUser() || {}
+  localStorage.setItem('wishlle_user', JSON.stringify({ ...current, ...payload }))
+  return updated
+}
 
 // Parser
 export async function parseUrl(url) {
@@ -137,20 +160,11 @@ export async function createEvent(payload) {
   })
 }
 
-// Users
-export async function getMe() {
-  return directus(`/items/users/${getUserId()}`)
-}
-
-export async function updateMe(payload) {
-  return directus(`/items/users/${getUserId()}`, { method: 'PATCH', body: JSON.stringify(payload) })
+// Catalog
+export async function getCatalog() {
+  return directus('/items/catalog_items?sort[]=sort_order&limit=20')
 }
 
 export async function searchUsers(username) {
   return directus(`/items/users?filter[username][_icontains]=${username}&limit=10`)
-}
-
-// Catalog
-export async function getCatalog() {
-  return directus('/items/catalog_items?sort[]=sort_order&limit=20')
 }
