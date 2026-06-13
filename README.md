@@ -80,9 +80,3 @@ npm run build
 
 1. Відкрити Mini App кнопкою бота — головна сторінка повинна з'явитися без додаткового входу.
 2. Відкрити Vercel URL у Chrome — натиснути «Увійти через Telegram», підтвердити в popup, після чого popup закриється і відкриється головна сторінка.
-
-## Google authentication
-
-У цій версії додано Google Identity Services у режимі popup. Після отримання Google ID token фронтенд надсилає його на `POST /backend/api/auth/google`, а бекенд створює або завантажує користувача через поле `google_sub`.
-
-Детальне налаштування: `GOOGLE_AUTH_SETUP.md`.

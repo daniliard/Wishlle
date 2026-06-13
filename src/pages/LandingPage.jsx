@@ -6,12 +6,18 @@ import { getGoogleClientId, loadGoogleIdentityServices } from '../auth/google'
 import { looksLikeTelegramLaunch } from '../auth/telegram'
 
 const features = [
-  { icon: '🎁', title: 'Вішліст', text: 'Додавай бажані речі та ділись списком з близькими одним посиланням.' },
-  { icon: '👥', title: 'Друзі', text: 'Дивись списки друзів, резервуй подарунки й більше не гадай, що подарувати.' },
-  { icon: '🗓️', title: 'Нагадування', text: 'Усі важливі дати в одному місці. Telegram-бот нагадає про подію заздалегідь.' },
+  { icon: '🎁', title: 'Вішлісти', text: 'Створюй окремі списки для свят, покупок і мрій. Додавай бажання вручну або за посиланням.' },
+  { icon: '👥', title: 'Друзі та подарунки', text: 'Переглядай списки друзів і резервуй подарунки, щоб ніхто не купив те саме.' },
+  { icon: '🗓️', title: 'Події та нагадування', text: 'Зберігай важливі дати, плануй події та отримуй нагадування через Telegram-бота.' },
 ]
 
-function TelegramLoginButton({ onLogin, small = false }) {
+const steps = [
+  { number: '01', title: 'Увійди за кілька секунд', text: 'Обери Telegram або Google — без окремого пароля та довгої реєстраційної форми.' },
+  { number: '02', title: 'Створи свій список', text: 'Додай назву, фото, ціну, посилання та коментар до кожного бажаного подарунка.' },
+  { number: '03', title: 'Поділись із близькими', text: 'Друзі побачать актуальний список і зможуть зарезервувати подарунок без спойлерів для тебе.' },
+]
+
+function TelegramLoginButton({ onLogin }) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
@@ -37,7 +43,7 @@ function TelegramLoginButton({ onLogin, small = false }) {
     <div className="tg-login-wrap">
       <button
         type="button"
-        className={`tg-login-button${small ? ' tg-login-button--small' : ''}`}
+        className="tg-login-button"
         onClick={handleLogin}
         disabled={loading}
       >
@@ -48,7 +54,7 @@ function TelegramLoginButton({ onLogin, small = false }) {
           </>
         ) : (
           <>
-            <svg width={small ? 18 : 22} height={small ? 18 : 22} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
               <path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.894 8.221-1.97 9.28c-.145.658-.537.818-1.084.508l-3-2.21-1.447 1.394c-.16.16-.295.295-.605.295l.213-3.053 5.56-5.023c.242-.213-.054-.333-.373-.12L8.32 13.617l-2.96-.924c-.643-.204-.657-.643.136-.953l11.57-4.461c.537-.194 1.006.131.828.942z" />
             </svg>
             Увійти через Telegram
@@ -184,7 +190,6 @@ export default function LandingPage({ onLogin }) {
     <div className="landing-page">
       <nav className="landing-nav">
         <span className="landing-logo">Wishlle</span>
-        <TelegramLoginButton onLogin={onLogin} small />
       </nav>
 
       <main>
@@ -201,14 +206,15 @@ export default function LandingPage({ onLogin }) {
             та не забувай про важливі дати.
           </p>
 
-          <AuthOptions
-            onLogin={onLogin}
-            googleReady={googleReady}
-            googleLoading={googleLoading}
-            googleError={googleError}
-            onGoogleRenderError={handleGoogleRenderError}
-          />
-          <p className="landing-auth-note">Обери Telegram або Google. Паролі Wishlle не зберігає.</p>
+          <div className="landing-hero__highlights" aria-label="Переваги Wishlle">
+            <span>🎁 Списки побажань</span>
+            <span>🔒 Резервування без спойлерів</span>
+            <span>📱 Браузер і Telegram</span>
+          </div>
+
+          <p className="landing-hero__promise">
+            Один простір для власних бажань, списків друзів, подарунків і майбутніх подій.
+          </p>
 
           <div className="landing-scroll-hint">
             <span>↓</span>
@@ -217,7 +223,12 @@ export default function LandingPage({ onLogin }) {
         </section>
 
         <section className="landing-features">
-          <h2>Все в одному місці</h2>
+          <div className="landing-section-heading">
+            <span>Можливості</span>
+            <h2>Все потрібне для подарунків — в одному місці</h2>
+            <p>Не збирай посилання по чатах і нотатках. Wishlle тримає списки, статуси та важливі дати впорядкованими.</p>
+          </div>
+
           <div className="landing-feature-grid">
             {features.map((feature) => (
               <article className="landing-feature-card" key={feature.title}>
@@ -229,9 +240,31 @@ export default function LandingPage({ onLogin }) {
           </div>
         </section>
 
+        <section className="landing-how" id="how-it-works">
+          <div className="landing-section-heading">
+            <span>Як це працює</span>
+            <h2>Від входу до готового списку — три прості кроки</h2>
+          </div>
+
+          <div className="landing-step-grid">
+            {steps.map((step) => (
+              <article className="landing-step-card" key={step.number}>
+                <div className="landing-step-card__number">{step.number}</div>
+                <h3>{step.title}</h3>
+                <p>{step.text}</p>
+              </article>
+            ))}
+          </div>
+        </section>
+
         <section className="landing-cta">
-          <h2>Готовий спробувати?</h2>
-          <p>Обери зручний спосіб входу — Telegram або Google.</p>
+          <div className="landing-cta__glow" />
+          <div className="landing-section-heading landing-section-heading--compact">
+            <span>Почнемо?</span>
+            <h2>Готовий спробувати?</h2>
+            <p>Обери зручний спосіб входу — Telegram або Google.</p>
+          </div>
+
           <AuthOptions
             onLogin={onLogin}
             googleReady={googleReady}
@@ -239,6 +272,10 @@ export default function LandingPage({ onLogin }) {
             googleError={googleError}
             onGoogleRenderError={handleGoogleRenderError}
           />
+
+          <p className="landing-auth-note">
+            🔐 Wishlle не створює і не зберігає паролі. Авторизація проходить через захищені сервіси Telegram або Google.
+          </p>
         </section>
       </main>
 
