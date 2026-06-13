@@ -4,26 +4,29 @@ import { loginTelegram } from '../api/client'
 export default function Login({ onLogin }) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
-  const widgetRef = useRef(null)
 
-  async function handleTelegramAuth(telegramUser) {
+  async function handleTelegramResult(data) {
+    if (data.error) {
+      setError('Помилка авторизації: ' + data.error)
+      return
+    }
     setLoading(true)
     setError(null)
     try {
-      // Конвертуємо дані від віджету в initData формат
+      // Новий API повертає id_token — передаємо на бекенд як Google токен
+      // Але спочатку пробуємо через user дані
+      const user = data.user
       const params = new URLSearchParams()
-      const user = {
-        id: telegramUser.id,
-        first_name: telegramUser.first_name,
-        last_name: telegramUser.last_name,
-        username: telegramUser.username,
-        photo_url: telegramUser.photo_url,
-        auth_date: telegramUser.auth_date,
-      }
-      params.set('user', JSON.stringify(user))
-      params.set('auth_date', String(telegramUser.auth_date))
-      params.set('hash', telegramUser.hash)
-
+      params.set('user', JSON.stringify({
+        id: user.id,
+        first_name: user.name?.split(' ')[0] || '',
+        last_name: user.name?.split(' ').slice(1).join(' ') || '',
+        username: user.preferred_username || '',
+        photo_url: user.picture || '',
+        auth_date: user.iat || Math.floor(Date.now() / 1000),
+      }))
+      params.set('auth_date', String(user.iat || Math.floor(Date.now() / 1000)))
+      params.set('hash', data.id_token)
       await loginTelegram(params.toString())
       onLogin()
     } catch (e) {
@@ -43,24 +46,26 @@ export default function Login({ onLogin }) {
       return
     }
 
-    // Браузер — Telegram Login Widget
-    window.onTelegramAuth = handleTelegramAuth
-
+    // Браузер — новий Telegram Login
     const script = document.createElement('script')
-    script.src = 'https://telegram.org/js/telegram-widget.js?22'
-    script.setAttribute('data-userpic', 'false')
-    script.setAttribute('data-auth-url', window.location.origin)
-    script.setAttribute('data-telegram-login', 'Wishlle_bot')
-    script.setAttribute('data-size', 'large')
-    script.setAttribute('data-request-access', 'write')
+    script.src = 'https://telegram.org/js/telegram-login.js'
     script.async = true
-
-    if (widgetRef.current) {
-      widgetRef.current.innerHTML = ''
-      widgetRef.current.appendChild(script)
+    script.onload = () => {
+      if (window.Telegram?.Login) {
+        window.Telegram.Login.init(
+          {
+            client_id: 8624605092,
+            request_access: ['write'],
+          },
+          (data) => handleTelegramResult(data)
+        )
+      }
     }
+    document.head.appendChild(script)
 
-    return () => { delete window.onTelegramAuth }
+    return () => {
+      document.head.removeChild(script)
+    }
   }, [])
 
   if (loading) {
@@ -95,7 +100,16 @@ export default function Login({ onLogin }) {
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12, width: '100%', maxWidth: 320 }}>
-        <div ref={widgetRef} style={{ minHeight: 48 }} />
+        <button
+          className="btn-primary"
+          onClick={() => window.Telegram?.Login?.open()}
+          style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, padding: '14px 24px', fontSize: '1rem', width: '100%' }}
+        >
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.894 8.221l-1.97 9.28c-.145.658-.537.818-1.084.508l-3-2.21-1.447 1.394c-.16.16-.295.295-.605.295l.213-3.053 5.56-5.023c.242-.213-.054-.333-.373-.12L8.32 13.617l-2.96-.924c-.643-.204-.657-.643.136-.953l11.57-4.461c.537-.194 1.006.131.828.942z"/>
+          </svg>
+          Увійти через Telegram
+        </button>
       </div>
 
       {error && (
