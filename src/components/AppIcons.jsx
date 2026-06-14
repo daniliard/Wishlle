@@ -33,6 +33,10 @@ export default function AppIcon({ name, size = 20, strokeWidth = 1.9, className 
     menu: <><path d="M4 6h16M4 12h16M4 18h16"/></>,
     close: <><path d="M18 6 6 18M6 6l12 12"/></>,
     link: <><path d="M10 13a5 5 0 0 0 7.1.1l2-2a5 5 0 0 0-7.1-7.1l-1.1 1.1"/><path d="M14 11a5 5 0 0 0-7.1-.1l-2 2A5 5 0 0 0 12 20l1.1-1.1"/></>,
+    camera: <><path d="M14.5 4 16 6h3a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h3l1.5-2Z"/><circle cx="12" cy="13" r="4"/></>,
+    upload: <><path d="M12 16V4"/><path d="m7 9 5-5 5 5"/><path d="M5 20h14"/></>,
+    trash: <><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="m19 6-1 14H6L5 6"/><path d="M10 11v5M14 11v5"/></>,
+    shield: <><path d="M12 3 4.5 6v5.5c0 4.8 3 7.7 7.5 9.5 4.5-1.8 7.5-4.7 7.5-9.5V6Z"/><path d="m9 12 2 2 4-4"/></>,
   }
 
   return <svg {...common}>{paths[name] || paths.home}</svg>

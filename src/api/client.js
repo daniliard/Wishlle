@@ -31,8 +31,9 @@ export function isLoggedIn() { return !!getToken() }
 
 async function request(url, options = {}) {
   const token = getToken()
+  const isFormData = typeof FormData !== 'undefined' && options.body instanceof FormData
   const headers = {
-    'Content-Type': 'application/json',
+    ...(!isFormData ? { 'Content-Type': 'application/json' } : {}),
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
     ...options.headers,
   }
@@ -107,19 +108,37 @@ export function logout() { removeAuth(); window.location.reload() }
 
 // ── User ──────────────────────────────────────────────────────────────────
 export async function getMe() {
-  return getCachedUser()
+  const user = await request(`${BACKEND_URL}/api/profile/me`)
+  localStorage.setItem('wishlle_user', JSON.stringify(user))
+  return user
 }
 
 export async function updateMe(payload) {
-  const userId = getUserId()
-  const updated = await directus(`/items/users/${userId}`, {
+  const updated = await request(`${BACKEND_URL}/api/profile/me`, {
     method: 'PATCH',
     body: JSON.stringify(payload),
   })
-  const current = getCachedUser() || {}
-  const merged = { ...current, ...payload, ...(updated || {}) }
-  localStorage.setItem('wishlle_user', JSON.stringify(merged))
-  return merged
+  localStorage.setItem('wishlle_user', JSON.stringify(updated))
+  return updated
+}
+
+export async function uploadAvatar(file) {
+  const body = new FormData()
+  body.append('file', file)
+  const updated = await request(`${BACKEND_URL}/api/profile/avatar`, {
+    method: 'POST',
+    body,
+  })
+  localStorage.setItem('wishlle_user', JSON.stringify(updated))
+  return updated
+}
+
+export async function removeAvatar() {
+  const updated = await request(`${BACKEND_URL}/api/profile/avatar`, {
+    method: 'DELETE',
+  })
+  localStorage.setItem('wishlle_user', JSON.stringify(updated))
+  return updated
 }
 
 // ── Parser ────────────────────────────────────────────────────────────────
