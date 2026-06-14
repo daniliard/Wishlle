@@ -331,3 +331,24 @@ export async function cancelReservation(itemId) {
 export async function getMyReservations() {
   return request(`${BACKEND_URL}/api/reservations/mine`)
 }
+
+// ── Notifications (центр сповіщень) ─────────────────────────────────────────
+export async function getNotifications(limit = 50) {
+  return request(`${BACKEND_URL}/api/notifications?limit=${limit}`)
+}
+
+export async function getUnreadCount() {
+  return request(`${BACKEND_URL}/api/notifications/unread`)
+}
+
+export async function markNotificationRead(id) {
+  return request(`${BACKEND_URL}/api/notifications/${id}/read`, { method: 'POST' })
+}
+
+export async function markAllNotificationsRead() {
+  return request(`${BACKEND_URL}/api/notifications/read-all`, { method: 'POST' })
+}
+
+export async function deleteNotification(id) {
+  return request(`${BACKEND_URL}/api/notifications/${id}`, { method: 'DELETE' })
+}

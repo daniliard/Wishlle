@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import AppIcon from './AppIcons'
+import NotificationBell from './NotificationBell'
 import { useLanguage } from '../i18n/LanguageContext'
 import s from './Navbar.module.css'
 
@@ -58,10 +59,7 @@ export default function Navbar({ current, onNav, onLogout, user }) {
           <AppIcon name="search" size={18} />
         </button>
 
-        <button type="button" className={s.iconBtn} aria-label={tr('Сповіщення', 'Notifications')}>
-          <AppIcon name="bell" size={18} />
-          <span className={s.notifDot}>3</span>
-        </button>
+        <NotificationBell onNav={navigate} />
 
         <div className={s.profileWrap} ref={dropdownRef}>
           <button type="button" className={s.avatar} onClick={() => setDropOpen(value => !value)} aria-expanded={dropOpen}>
