@@ -197,16 +197,35 @@ export async function deleteItem(id) {
 
 // ── Friends ───────────────────────────────────────────────────────────────
 export async function getFriends() {
-  const userId = getUserId()
-  // expand friend user data
-  return directus(`/items/friendships?filter[user_id][_eq]=${userId}&fields[]=*,friend.*`)
+  return request(`${BACKEND_URL}/api/friends`)
+}
+
+export async function searchUsers(query) {
+  return request(`${BACKEND_URL}/api/friends/search?q=${encodeURIComponent(query)}`)
 }
 
 export async function addFriend(friendId) {
-  return directus('/items/friendships', {
+  return request(`${BACKEND_URL}/api/friends`, {
     method: 'POST',
-    body: JSON.stringify({ user_id: getUserId(), friend_id: friendId }),
+    body: JSON.stringify({ friend_id: friendId }),
   })
+}
+
+export async function updateFriend(friendshipId, payload) {
+  return request(`${BACKEND_URL}/api/friends/${friendshipId}`, {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
+  })
+}
+
+export async function removeFriend(friendshipId) {
+  return request(`${BACKEND_URL}/api/friends/${friendshipId}`, {
+    method: 'DELETE',
+  })
+}
+
+export async function getFriendDetails(friendId) {
+  return request(`${BACKEND_URL}/api/friends/${friendId}/details`)
 }
 
 // ── Events ────────────────────────────────────────────────────────────────
@@ -225,11 +244,6 @@ export async function createEvent(payload) {
 // ── Catalog ───────────────────────────────────────────────────────────────
 export async function getCatalog() {
   return directus('/items/catalog_items?sort[]=sort_order&limit=50')
-}
-
-// ── Search users ──────────────────────────────────────────────────────────
-export async function searchUsers(username) {
-  return directus(`/items/users?filter[username][_icontains]=${encodeURIComponent(username)}&limit=10&fields[]=id,display_name,username,avatar_url`)
 }
 
 // ── Завершення браузерного OAuth (обмін code → токен) ───────────────────────
