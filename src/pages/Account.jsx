@@ -67,6 +67,28 @@ function normalizePreferences(value, hasTelegram = true) {
   }
 }
 
+
+const LOCAL_SETTINGS_PREFIX = 'wishlle_local_profile_settings_'
+
+function settingsStorageKey(userId) {
+  return `${LOCAL_SETTINGS_PREFIX}${userId || 'current'}`
+}
+
+function loadLocalPreferences(userId, hasTelegram = true) {
+  try {
+    const raw = localStorage.getItem(settingsStorageKey(userId))
+    return normalizePreferences(raw ? JSON.parse(raw) : null, hasTelegram)
+  } catch {
+    return normalizePreferences(null, hasTelegram)
+  }
+}
+
+function saveLocalPreferences(userId, value, hasTelegram = true) {
+  const normalized = normalizePreferences(value, hasTelegram)
+  localStorage.setItem(settingsStorageKey(userId), JSON.stringify(normalized))
+  return normalized
+}
+
 function ToggleSetting({ title, description, checked, disabled = false, onChange, badge }) {
   return (
     <div className={`${s.settingRow} ${disabled ? s.settingDisabled : ''}`}>
@@ -97,7 +119,7 @@ export default function Account({ user: userFromApp, onUserUpdated, onLogout }) 
   const fileInputRef = useRef(null)
   const [user, setUser] = useState(userFromApp || null)
   const [form, setForm] = useState(() => normalizeUser(userFromApp))
-  const [preferences, setPreferences] = useState(() => normalizePreferences(userFromApp?.preferences, userFromApp?.has_telegram !== false))
+  const [preferences, setPreferences] = useState(() => loadLocalPreferences(userFromApp?.id, userFromApp?.has_telegram !== false))
   const [avatarFile, setAvatarFile] = useState(null)
   const [avatarPreview, setAvatarPreview] = useState('')
   const [avatarRemoved, setAvatarRemoved] = useState(false)
@@ -114,7 +136,7 @@ export default function Account({ user: userFromApp, onUserUpdated, onLogout }) 
       setUser(value)
       setForm(normalizeUser(value))
       setLanguage(normalizeUser(value).language)
-      setPreferences(normalizePreferences(value.preferences, value.has_telegram))
+      setPreferences(loadLocalPreferences(value.id, value.has_telegram))
       setAvatarRemoved(false)
       setAvatarBroken(false)
     }
@@ -151,7 +173,7 @@ export default function Account({ user: userFromApp, onUserUpdated, onLogout }) 
   const dirty = useMemo(() => {
     if (!user) return false
     const fieldsChanged = Object.keys(EMPTY_FORM).some(key => (form[key] || '') !== (normalizeUser(user)[key] || ''))
-    const preferencesChanged = JSON.stringify(preferences) !== JSON.stringify(normalizePreferences(user.preferences, user.has_telegram))
+    const preferencesChanged = JSON.stringify(preferences) !== JSON.stringify(loadLocalPreferences(user.id, user.has_telegram))
     return fieldsChanged || preferencesChanged || Boolean(avatarFile) || avatarRemoved
   }, [avatarFile, avatarRemoved, form, preferences, user])
 
@@ -219,7 +241,6 @@ export default function Account({ user: userFromApp, onUserUpdated, onLogout }) 
         username: form.username.trim() || null,
         birth_date: form.birth_date || null,
         language: form.language,
-        preferences,
       })
 
       if (avatarRemoved) updated = await removeAvatar()
@@ -230,12 +251,15 @@ export default function Account({ user: userFromApp, onUserUpdated, onLogout }) 
       setAvatarPreview('')
       setAvatarRemoved(false)
       setAvatarBroken(false)
-      setUser(updated)
-      setForm(normalizeUser(updated))
-      setLanguage(normalizeUser(updated).language)
-      setPreferences(normalizePreferences(updated.preferences, updated.has_telegram))
-      onUserUpdated?.(updated)
-      setMessage({ type: 'success', text: tr('Профіль і налаштування успішно оновлено.', 'Profile and settings updated successfully.') })
+      const savedPreferences = saveLocalPreferences(updated.id, preferences, updated.has_telegram)
+      const updatedWithLocalSettings = { ...updated, preferences: savedPreferences }
+      localStorage.setItem('wishlle_user', JSON.stringify(updatedWithLocalSettings))
+      setUser(updatedWithLocalSettings)
+      setForm(normalizeUser(updatedWithLocalSettings))
+      setLanguage(normalizeUser(updatedWithLocalSettings).language)
+      setPreferences(savedPreferences)
+      onUserUpdated?.(updatedWithLocalSettings)
+      setMessage({ type: 'success', text: tr('Профіль оновлено, локальні налаштування збережено.', 'Profile updated and local settings saved.') })
     } catch (error) {
       setMessage({ type: 'error', text: error?.message || tr('Не вдалося зберегти зміни.', 'Could not save changes.') })
     } finally {
@@ -248,7 +272,7 @@ export default function Account({ user: userFromApp, onUserUpdated, onLogout }) 
     if (avatarPreview) URL.revokeObjectURL(avatarPreview)
     setForm(normalizeUser(user))
     setLanguage(normalizeUser(user).language)
-    setPreferences(normalizePreferences(user.preferences, user.has_telegram))
+    setPreferences(loadLocalPreferences(user.id, user.has_telegram))
     setAvatarFile(null)
     setAvatarPreview('')
     setAvatarRemoved(false)
@@ -512,8 +536,8 @@ export default function Account({ user: userFromApp, onUserUpdated, onLogout }) 
             <div className={s.saveInfo}>
               <AppIcon name="shield" size={20} />
               <div>
-                <strong>{tr('Налаштування зберігаються в акаунті', 'Settings are saved to your account')}</strong>
-                <p>{tr('Вони застосовуються і у вебверсії, і в Telegram Mini App.', 'They apply to both the web version and Telegram Mini App.')}</p>
+                <strong>{tr('Профіль зберігається в акаунті', 'Your profile is saved to your account')}</strong>
+                <p>{tr('Мова та дані профілю синхронізуються. Перемикачі приватності й сповіщень поки зберігаються лише на цьому пристрої.', 'Language and profile data are synced. Privacy and notification toggles are currently saved only on this device.')}</p>
               </div>
             </div>
 

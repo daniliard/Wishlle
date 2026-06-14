@@ -307,7 +307,7 @@ export default function Friends() {
             {(query.trim().length >= 2 || searching) && (
               <div className={s.searchResults}>
                 {searching && <div className={s.searchState}>{tr('Шукаємо користувачів…', 'Searching users…')}</div>}
-                {!searching && results.length === 0 && <div className={s.searchState}>{tr('Нікого не знайдено або користувач вимкнув пошук.', 'Nobody found or the user disabled search.')}</div>}
+                {!searching && results.length === 0 && <div className={s.searchState}>{tr('Нікого не знайдено.', 'Nobody found.')}</div>}
                 {!searching && results.map(user => (
                   <div className={s.searchUser} key={user.id}>
                     <UserAvatar user={user} />
