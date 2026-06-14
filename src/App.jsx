@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
-import AppShell from './components/AppShell'
+import Navbar from './components/Navbar'
+import BottomNav from './components/BottomNav'
 import Home from './pages/Home'
 import Lists from './pages/Lists'
 import Friends from './pages/Friends'
@@ -126,28 +127,28 @@ export default function App() {
   }
 
   const PageComponent = PAGES[page] || Home
+  const handleLogout = () => {
+    logout()
+    setUser(null)
+    setAuth(false)
+  }
+  const navigate = (nextPage) => {
+    setPage(nextPage)
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
 
   return (
-    <AppShell
-      current={page}
-      onNav={setPage}
-      user={user}
-      onLogout={() => {
-        logout()
-        setUser(null)
-        setAuth(false)
-      }}
-    >
-      <PageComponent
-        onNav={setPage}
-        user={user}
-        onUserUpdated={(updatedUser) => setUser(updatedUser)}
-        onLogout={() => {
-          logout()
-          setUser(null)
-          setAuth(false)
-        }}
-      />
-    </AppShell>
+    <>
+      <Navbar current={page} onNav={navigate} onLogout={handleLogout} user={user} />
+      <div className="page-wrap">
+        <PageComponent
+          onNav={navigate}
+          user={user}
+          onUserUpdated={(updatedUser) => setUser(updatedUser)}
+          onLogout={handleLogout}
+        />
+      </div>
+      <BottomNav current={page} onNav={navigate} />
+    </>
   )
 }

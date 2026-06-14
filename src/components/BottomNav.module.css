@@ -1,28 +1,56 @@
-/* Hidden on desktop */
 .nav { display: none; }
 
 @media (max-width: 768px) {
   .nav {
-    display: flex;
-    position: fixed; bottom: 0; left: 0; right: 0; z-index: 200;
-    height: 64px;
-    background: rgba(9,18,30,0.97);
-    backdrop-filter: blur(20px);
+    position: fixed;
+    inset: auto 0 0 0;
+    z-index: 300;
+    height: var(--bottom-nav-h);
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    align-items: stretch;
+    padding: 4px max(4px, env(safe-area-inset-right)) calc(5px + env(safe-area-inset-bottom)) max(4px, env(safe-area-inset-left));
     border-top: 1px solid var(--border);
-    align-items: center; justify-content: space-around;
-    padding: 0 4px 6px;
+    background: rgba(9, 18, 30, .97);
+    backdrop-filter: blur(20px);
   }
 
   .item {
-    display: flex; flex-direction: column; align-items: center; gap: 3px;
-    padding: 6px 10px; border-radius: 12px; cursor: pointer;
-    transition: all 0.2s; flex: 1;
+    position: relative;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    padding: 5px 2px;
+    border: 0;
+    border-radius: 11px;
+    background: transparent;
+    color: var(--muted);
+    font-family: inherit;
+    cursor: pointer;
+    transition: .18s ease;
   }
-  .item:active { background: var(--surface2); transform: scale(0.93); }
 
-  .icon  { font-size: 1.25rem; line-height: 1; }
-  .label { font-size: 0.56rem; font-weight: 700; color: var(--muted); }
+  .item span {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: .54rem;
+    font-weight: 800;
+  }
 
-  .item.active { background: var(--cyan-glow); }
-  .item.active .label { color: var(--cyan); }
+  .item:active { transform: scale(.94); background: var(--surface2); }
+  .item.active { color: var(--cyan); background: var(--cyan-glow); }
+  .item.active::before {
+    content: '';
+    position: absolute;
+    top: -4px;
+    width: 26px;
+    height: 2px;
+    border-radius: 0 0 2px 2px;
+    background: var(--cyan);
+  }
 }

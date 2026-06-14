@@ -1,20 +1,34 @@
 import { useEffect, useMemo, useState } from 'react'
-import AppIcon from '../components/AppIcons'
-import { getFriends, getMyEvents, getMyLists } from '../api/client'
+import Footer from '../components/Footer'
+import { getCatalog, getFriends, getMyEvents, getMyLists } from '../api/client'
 import s from './Home.module.css'
 
-function normaliseArray(value) {
+const features = [
+  { icon: '🎁', title: 'Твій вішліст', text: 'Додавай бажані речі та ділися списками з близькими одним посиланням.' },
+  { icon: '👥', title: 'Друзі', text: 'Переглядай списки друзів, резервуй подарунки й уникай повторів.' },
+  { icon: '🗓️', title: 'Нагадування', text: 'Зберігай важливі дати та плануй приватні й групові події.' },
+]
+
+function asArray(value) {
   return Array.isArray(value) ? value : []
 }
 
-function dateLabel(value) {
-  if (!value) return 'Без дати'
+function daysUntil(value) {
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
   const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return value
-  return new Intl.DateTimeFormat('uk-UA', { day: 'numeric', month: 'long' }).format(date)
+  date.setHours(0, 0, 0, 0)
+  return Math.round((date - today) / 86400000)
 }
 
-function getFirstName(user) {
+function formatDays(value) {
+  if (value === 0) return 'Сьогодні 🔥'
+  if (value === 1) return 'Завтра 🔥'
+  if (value > 1 && value < 5) return `${value} дні`
+  return `${value} днів`
+}
+
+function firstName(user) {
   return user?.display_name?.trim().split(/\s+/)[0] || user?.username || 'друже'
 }
 
@@ -22,155 +36,159 @@ export default function Home({ onNav, user }) {
   const [lists, setLists] = useState([])
   const [events, setEvents] = useState([])
   const [friends, setFriends] = useState([])
+  const [catalog, setCatalog] = useState([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     let cancelled = false
 
-    Promise.allSettled([getMyLists(), getMyEvents(), getFriends()])
-      .then(([listsResult, eventsResult, friendsResult]) => {
+    Promise.allSettled([getMyLists(), getMyEvents(), getFriends(), getCatalog()])
+      .then(([listsResult, eventsResult, friendsResult, catalogResult]) => {
         if (cancelled) return
-        if (listsResult.status === 'fulfilled') setLists(normaliseArray(listsResult.value))
-        if (eventsResult.status === 'fulfilled') setEvents(normaliseArray(eventsResult.value))
-        if (friendsResult.status === 'fulfilled') setFriends(normaliseArray(friendsResult.value))
+        if (listsResult.status === 'fulfilled') setLists(asArray(listsResult.value))
+        if (eventsResult.status === 'fulfilled') setEvents(asArray(eventsResult.value))
+        if (friendsResult.status === 'fulfilled') setFriends(asArray(friendsResult.value))
+        if (catalogResult.status === 'fulfilled') setCatalog(asArray(catalogResult.value).slice(0, 6))
       })
       .finally(() => { if (!cancelled) setLoading(false) })
 
     return () => { cancelled = true }
   }, [])
 
-  const upcomingEvents = useMemo(() => {
-    const now = new Date()
-    now.setHours(0, 0, 0, 0)
-    return events
-      .filter(item => item.event_date)
-      .map(item => ({ ...item, parsedDate: new Date(item.event_date) }))
-      .filter(item => !Number.isNaN(item.parsedDate.getTime()) && item.parsedDate >= now)
-      .sort((a, b) => a.parsedDate - b.parsedDate)
-      .slice(0, 3)
-  }, [events])
+  const totalItems = useMemo(
+    () => lists.reduce((sum, list) => sum + Number(list?.items_count || 0), 0),
+    [lists],
+  )
 
-  const profileFields = [user?.display_name, user?.username, user?.birth_date, user?.avatar_url]
-  const profileProgress = Math.round((profileFields.filter(Boolean).length / profileFields.length) * 100)
+  const upcomingEvents = useMemo(() => events
+    .filter(event => event?.event_date)
+    .map(event => ({ ...event, daysLeft: daysUntil(event.event_date) }))
+    .filter(event => event.daysLeft >= 0)
+    .sort((a, b) => a.daysLeft - b.daysLeft)
+    .slice(0, 3), [events])
+
+  const stats = [
+    { icon: '📋', value: lists.length, label: 'Списків', page: 'lists' },
+    { icon: '🎁', value: totalItems, label: 'Товарів', page: 'lists' },
+    { icon: '👥', value: friends.length, label: 'Друзів', page: 'friends' },
+    { icon: '🗓️', value: events.length, label: 'Для тебе', page: 'events' },
+  ]
 
   return (
-    <div className={s.page}>
-      <section className={s.welcomeCard}>
-        <div className={s.welcomeGlow} />
-        <div className={s.welcomeContent}>
-          <div className={s.eyebrow}><AppIcon name="sparkles" size={15} /> Особистий простір Wishlle</div>
-          <h2>Привіт, {getFirstName(user)} 👋</h2>
-          <p>Збирай бажання в одному місці, плануй події та допомагай друзям обирати справді потрібні подарунки.</p>
-          <div className={s.actions}>
-            <button type="button" className="btn-primary" onClick={() => onNav('lists')}>
-              <AppIcon name="plus" size={17} /> Створити список
-            </button>
-            <button type="button" className="btn-outline" onClick={() => onNav('events')}>
-              <AppIcon name="events" size={17} /> Додати подію
-            </button>
+    <div className="anim-fade-up">
+      <section className={s.hero}>
+        <div className={s.heroLeft}>
+          <div className={s.eyebrow}>✦ Your personal wishlist app</div>
+          <h1 className={s.logo}>Wish<span>lle</span></h1>
+          <p className={s.sub}>Зберігай мрії, ділись побажаннями з близькими і ніколи не забувай про важливі дати.</p>
+          <div className={s.heroBtns}>
+            <button type="button" className="btn-primary" onClick={() => onNav('lists')}>＋ Створити список</button>
+            <button type="button" className="btn-outline" onClick={() => onNav('events')}>＋ Створити подію</button>
           </div>
         </div>
-        <div className={s.welcomeArt} aria-hidden="true">
-          <div className={s.giftCircle}><AppIcon name="gift" size={62} strokeWidth={1.45} /></div>
-          <span className={s.artDotOne} />
-          <span className={s.artDotTwo} />
-          <span className={s.artDotThree} />
+
+        <div className={s.heroRight}>
+          <div className={s.heroAv}>
+            {user?.avatar_url
+              ? <img src={user.avatar_url} alt="Аватар" referrerPolicy="no-referrer" />
+              : '😎'}
+          </div>
+          <div className={s.heroGreeting}>
+            <div className={s.hg1}>Привіт, {firstName(user)} 👋</div>
+            <div className={s.hg2}>Що подаруємо сьогодні?</div>
+          </div>
         </div>
       </section>
 
-      <section className={s.statsGrid} aria-label="Статистика">
-        {[
-          { label: 'Мої списки', value: lists.length, icon: 'lists', hint: 'створено' },
-          { label: 'Друзі', value: friends.length, icon: 'friends', hint: 'у твоєму колі' },
-          { label: 'Події', value: events.length, icon: 'events', hint: 'заплановано' },
-        ].map(item => (
-          <article key={item.label} className={s.statCard}>
-            <div className={s.statIcon}><AppIcon name={item.icon} size={22} /></div>
-            <div>
-              <strong>{loading ? '—' : item.value}</strong>
-              <span>{item.label}</span>
-              <small>{item.hint}</small>
-            </div>
-          </article>
-        ))}
-      </section>
+      <div className="wrap">
+        <section className={s.statsRow} aria-label="Статистика">
+          {stats.map(stat => (
+            <button type="button" key={stat.label} className={s.statCard} onClick={() => onNav(stat.page)}>
+              <span className={s.statIcon}>{stat.icon}</span>
+              <span>
+                <strong className={s.statNum}>{loading ? '—' : stat.value}</strong>
+                <small className={s.statLabel}>{stat.label}</small>
+              </span>
+            </button>
+          ))}
+        </section>
+      </div>
 
-      <section className={s.mainGrid}>
-        <div className={s.panel}>
-          <div className={s.panelHeader}>
+      <div className="wrap">
+        <div className="section-header" style={{ paddingTop: 28 }}>
+          <div className="section-title">Найближчі події</div>
+          <button type="button" className="section-link" onClick={() => onNav('events')}>Дивитись усі →</button>
+        </div>
+
+        {upcomingEvents.length === 0 ? (
+          <button type="button" className={s.emptyEvents} onClick={() => onNav('events')}>
+            <span>🗓️</span>
             <div>
-              <span className={s.panelEyebrow}>Швидкий доступ</span>
-              <h3>Що зробимо сьогодні?</h3>
+              <strong>Поки немає найближчих подій</strong>
+              <small>Створи подію або додай дату народження у профілі.</small>
             </div>
-          </div>
-          <div className={s.quickGrid}>
-            {[
-              { title: 'Новий список', text: 'Створи окремий список для свята, мрій або покупок.', icon: 'lists', page: 'lists' },
-              { title: 'Знайти друга', text: 'Додай близьку людину та переглядай доступні списки.', icon: 'userCheck', page: 'friends' },
-              { title: 'Запланувати подію', text: 'Не забудь про день народження або спільне свято.', icon: 'events', page: 'events' },
-              { title: 'Переглянути каталог', text: 'Знайди ідею подарунка та збережи її до списку.', icon: 'catalog', page: 'catalog' },
-            ].map(item => (
-              <button type="button" key={item.title} className={s.quickCard} onClick={() => onNav(item.page)}>
-                <span className={s.quickIcon}><AppIcon name={item.icon} size={22} /></span>
-                <span className={s.quickCopy}>
-                  <strong>{item.title}</strong>
-                  <small>{item.text}</small>
-                </span>
-                <AppIcon name="arrowRight" size={17} className={s.quickArrow} />
+            <b>＋ Додати</b>
+          </button>
+        ) : (
+          <div className={s.eventsStrip}>
+            {upcomingEvents.map(event => (
+              <button type="button" key={event.id || `${event.title}-${event.event_date}`} className={s.evCard} onClick={() => onNav('events')}>
+                <div className={s.evCover}>🎂</div>
+                <div className={s.evBadge}>🗓️ {event.event_type === 'birthday' ? 'День народження' : 'Подія'}</div>
+                <div className={s.evBody}>
+                  <div className={s.evName}>{event.title || 'Подія'}</div>
+                  <div className={s.evDate}>{new Date(event.event_date).toLocaleDateString('uk-UA', { day: 'numeric', month: 'long' })}</div>
+                  <span className={`${s.evCount} ${event.daysLeft <= 1 ? s.urgent : ''}`}>{formatDays(event.daysLeft)}</span>
+                </div>
               </button>
             ))}
           </div>
+        )}
+      </div>
+
+      <div className="wrap">
+        <div className="section-header" style={{ paddingTop: 38 }}>
+          <div className="section-title">Можливості Wishlle</div>
         </div>
+        <div className={s.featuresGrid}>
+          {features.map(feature => (
+            <article key={feature.title} className={s.featureCard}>
+              <div className={s.featureIcon}>{feature.icon}</div>
+              <h3>{feature.title}</h3>
+              <p>{feature.text}</p>
+            </article>
+          ))}
+        </div>
+      </div>
 
-        <aside className={s.sideColumn}>
-          <div className={s.panel}>
-            <div className={s.panelHeaderCompact}>
-              <div>
-                <span className={s.panelEyebrow}>Профіль</span>
-                <h3>Заповнено на {profileProgress}%</h3>
-              </div>
-              <button type="button" onClick={() => onNav('account')}><AppIcon name="edit" size={16} /></button>
-            </div>
-            <div className={s.progressTrack}><span style={{ width: `${profileProgress}%` }} /></div>
-            <p className={s.profileHint}>
-              {profileProgress === 100
-                ? 'Чудово — профіль повністю заповнений.'
-                : 'Додай дату народження та актуальний аватар, щоб друзям було простіше тебе знайти.'}
-            </p>
-            <button type="button" className={s.textButton} onClick={() => onNav('account')}>Відкрити профіль <AppIcon name="arrowRight" size={15} /></button>
+      {catalog.length > 0 && (
+        <div className="wrap">
+          <div className="section-header" style={{ paddingTop: 38 }}>
+            <div className="section-title">Підбірка для натхнення</div>
+            <button type="button" className="section-link" onClick={() => onNav('catalog')}>До каталогу →</button>
           </div>
-
-          <div className={s.panel}>
-            <div className={s.panelHeaderCompact}>
-              <div>
-                <span className={s.panelEyebrow}>Найближче</span>
-                <h3>Події</h3>
-              </div>
-              <button type="button" onClick={() => onNav('events')}><AppIcon name="arrowRight" size={16} /></button>
-            </div>
-
-            {upcomingEvents.length ? (
-              <div className={s.eventsList}>
-                {upcomingEvents.map((event, index) => (
-                  <div key={event.id || `${event.title}-${index}`} className={s.eventRow}>
-                    <span className={s.eventDate}>{event.parsedDate.getDate()}<small>{event.parsedDate.toLocaleDateString('uk-UA', { month: 'short' })}</small></span>
-                    <div>
-                      <strong>{event.title || 'Подія'}</strong>
-                      <small>{event.location || dateLabel(event.event_date)}</small>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className={s.emptyState}>
-                <AppIcon name="events" size={26} />
-                <p>Поки немає запланованих подій.</p>
-                <button type="button" onClick={() => onNav('events')}>Додати першу</button>
-              </div>
-            )}
+          <div className={s.catalogGrid}>
+            {catalog.map(item => (
+              <article key={item.id} className={s.catalogCard}>
+                <div className={s.catalogImg}>
+                  {item.image_url
+                    ? <img src={item.image_url} alt={item.title || 'Товар'} loading="lazy" />
+                    : '🎁'}
+                </div>
+                <div className={s.catalogBody}>
+                  <div className={s.catalogName}>{item.title || 'Ідея подарунка'}</div>
+                  <div className={s.catalogPrice}>{item.price ? `${item.price} ${item.currency || '₴'}` : ''}</div>
+                </div>
+                <div className={s.catalogOverlay}>
+                  <button type="button" className="btn-cyan" onClick={() => onNav('catalog')}>Переглянути</button>
+                </div>
+              </article>
+            ))}
           </div>
-        </aside>
-      </section>
+        </div>
+      )}
+
+      <div className="wrap"><Footer /></div>
     </div>
   )
 }

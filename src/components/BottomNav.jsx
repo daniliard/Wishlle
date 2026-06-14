@@ -1,25 +1,27 @@
+import AppIcon from './AppIcons'
 import s from './BottomNav.module.css'
 
 const items = [
-  { id: 'home',    icon: '🏠', label: 'Головна' },
-  { id: 'lists',   icon: '📋', label: 'Списки' },
-  { id: 'catalog', icon: '🔍', label: 'Каталог' },
-  { id: 'friends', icon: '👥', label: 'Друзі' },
-  { id: 'account', icon: '👤', label: 'Профіль' },
+  { id: 'home', icon: 'home', label: 'Головна' },
+  { id: 'lists', icon: 'lists', label: 'Списки' },
+  { id: 'catalog', icon: 'catalog', label: 'Каталог' },
+  { id: 'friends', icon: 'friends', label: 'Друзі' },
+  { id: 'account', icon: 'profile', label: 'Профіль' },
 ]
 
 export default function BottomNav({ current, onNav }) {
   return (
-    <nav className={s.nav}>
-      {items.map(it => (
-        <div
-          key={it.id}
-          className={`${s.item} ${current === it.id ? s.active : ''}`}
-          onClick={() => onNav(it.id)}
+    <nav className={s.nav} aria-label="Мобільна навігація">
+      {items.map(item => (
+        <button
+          type="button"
+          key={item.id}
+          className={`${s.item} ${current === item.id ? s.active : ''}`}
+          onClick={() => onNav(item.id)}
         >
-          <div className={s.icon}>{it.icon}</div>
-          <div className={s.label}>{it.label}</div>
-        </div>
+          <AppIcon name={item.icon} size={21} />
+          <span>{item.label}</span>
+        </button>
       ))}
     </nav>
   )

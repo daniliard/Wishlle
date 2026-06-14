@@ -1,68 +1,97 @@
-import { useState } from 'react'
-import { getCachedUser } from '../api/client'
+import { useEffect, useRef, useState } from 'react'
+import AppIcon from './AppIcons'
 import s from './Navbar.module.css'
 
 const links = [
-  { id: 'home',    label: 'Головна'  },
-  { id: 'lists',   label: 'Мої списки' },
-  { id: 'friends', label: 'Друзі'    },
-  { id: 'events',  label: 'Події'    },
-  { id: 'catalog', label: 'Каталог'  },
+  { id: 'home', label: 'Головна' },
+  { id: 'lists', label: 'Мої списки' },
+  { id: 'friends', label: 'Друзі' },
+  { id: 'events', label: 'Події' },
+  { id: 'catalog', label: 'Каталог' },
 ]
 
-export default function Navbar({ current, onNav, onLogout }) {
-  const [searchOpen, setSearchOpen] = useState(false)
-  const [dropOpen,   setDropOpen]   = useState(false)
-  const user = getCachedUser()
+function initials(user) {
+  const value = user?.display_name || user?.username || 'W'
+  return value
+    .split(/\s+/)
+    .filter(Boolean)
+    .map(part => part[0])
+    .join('')
+    .slice(0, 2)
+    .toUpperCase()
+}
 
-  // Ініціали або перша літера імені
-  const initials = user
-    ? (user.display_name || user.username || '?')
-        .split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2)
-    : '?'
+export default function Navbar({ current, onNav, onLogout, user }) {
+  const [searchOpen, setSearchOpen] = useState(false)
+  const [dropOpen, setDropOpen] = useState(false)
+  const dropdownRef = useRef(null)
+
+  useEffect(() => {
+    function closeOutside(event) {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) setDropOpen(false)
+    }
+    document.addEventListener('pointerdown', closeOutside)
+    return () => document.removeEventListener('pointerdown', closeOutside)
+  }, [])
+
+  const navigate = (page) => {
+    setDropOpen(false)
+    onNav(page)
+  }
 
   return (
-    <nav className={s.nav}>
-      <div className={s.logo} onClick={() => onNav('home')}>Wishlle</div>
+    <header className={s.nav}>
+      <button type="button" className={s.logo} onClick={() => navigate('home')} aria-label="На головну">
+        Wish<span>lle</span>
+      </button>
 
-      <div className={s.links}>
-        {links.map(l => (
-          <a key={l.id} className={current === l.id ? s.active : ''} onClick={() => onNav(l.id)}>
-            {l.label}
-          </a>
+      <nav className={s.links} aria-label="Основна навігація">
+        {links.map(link => (
+          <button
+            type="button"
+            key={link.id}
+            className={current === link.id ? s.active : ''}
+            onClick={() => navigate(link.id)}
+          >
+            {link.label}
+          </button>
         ))}
-      </div>
+      </nav>
 
       <div className={s.right}>
         <div className={`${s.searchWrap} ${searchOpen ? s.open : ''}`}>
-          <input type="text" placeholder="Знайти користувача..." />
+          <input type="search" placeholder="Знайти користувача..." aria-label="Пошук користувача" />
         </div>
-        <div className={s.iconBtn} onClick={() => setSearchOpen(v => !v)}>🔍</div>
-        <div className={s.iconBtn} style={{ position: 'relative' }}>
-          🔔
-          <div className={s.notifDot}>3</div>
-        </div>
-        <div className={s.avatar} onClick={() => setDropOpen(v => !v)}>
-          {user?.avatar_url
-            ? <img src={user.avatar_url} alt="avatar" style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }} />
-            : initials
-          }
+
+        <button type="button" className={s.iconBtn} onClick={() => setSearchOpen(value => !value)} aria-label="Пошук">
+          <AppIcon name="search" size={18} />
+        </button>
+
+        <button type="button" className={s.iconBtn} aria-label="Сповіщення">
+          <AppIcon name="bell" size={18} />
+          <span className={s.notifDot}>3</span>
+        </button>
+
+        <div className={s.profileWrap} ref={dropdownRef}>
+          <button type="button" className={s.avatar} onClick={() => setDropOpen(value => !value)} aria-expanded={dropOpen}>
+            {user?.avatar_url
+              ? <img src={user.avatar_url} alt="Аватар" referrerPolicy="no-referrer" />
+              : <span>{initials(user)}</span>}
+          </button>
+
           {dropOpen && (
             <div className={s.dropdown}>
-              {user && (
-                <div style={{ padding: '8px 12px 12px', borderBottom: '1px solid rgba(255,255,255,0.07)', marginBottom: 4 }}>
-                  <div style={{ fontWeight: 800, fontSize: '0.9rem' }}>{user.display_name || user.username}</div>
-                  {user.username && <div style={{ color: 'rgba(255,255,255,0.42)', fontSize: '0.75rem' }}>@{user.username}</div>}
-                </div>
-              )}
-              <a onClick={() => { onNav('account'); setDropOpen(false) }}>👤 Профіль</a>
-              <a>⚙️ Налаштування</a>
-              <hr />
-              <a className={s.danger} onClick={() => { setDropOpen(false); onLogout?.() }}>🚪 Вийти</a>
+              <div className={s.dropdownUser}>
+                <strong>{user?.display_name || user?.username || 'Користувач'}</strong>
+                {user?.username && <span>@{user.username}</span>}
+              </div>
+              <button type="button" onClick={() => navigate('account')}><AppIcon name="profile" size={16} /> Профіль</button>
+              <div className={s.divider} />
+              <button type="button" className={s.danger} onClick={onLogout}><AppIcon name="logout" size={16} /> Вийти</button>
             </div>
           )}
         </div>
       </div>
-    </nav>
+    </header>
   )
 }
