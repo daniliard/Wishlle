@@ -10,6 +10,26 @@ const EMPTY_FORM = {
   language: 'uk',
 }
 
+const DEFAULT_PREFERENCES = {
+  privacy: {
+    profile_visibility: 'friends',
+    wishlists_visibility: 'friends',
+    show_birth_date: true,
+    show_username: true,
+    searchable_by_username: true,
+    allow_friend_requests: true,
+  },
+  notifications: {
+    in_app: true,
+    telegram: true,
+    event_reminders: true,
+    birthday_reminders: true,
+    friend_requests: true,
+    reservations: true,
+    wishlist_updates: false,
+  },
+}
+
 const MAX_AVATAR_SIZE = 5 * 1024 * 1024
 const ALLOWED_AVATAR_TYPES = ['image/jpeg', 'image/png', 'image/webp']
 
@@ -33,10 +53,49 @@ function normalizeUser(value) {
   }
 }
 
+function normalizePreferences(value, hasTelegram = true) {
+  const privacy = value?.privacy || {}
+  const notifications = value?.notifications || {}
+  return {
+    privacy: { ...DEFAULT_PREFERENCES.privacy, ...privacy },
+    notifications: {
+      ...DEFAULT_PREFERENCES.notifications,
+      ...notifications,
+      telegram: hasTelegram ? (notifications.telegram ?? true) : false,
+    },
+  }
+}
+
+function ToggleSetting({ title, description, checked, disabled = false, onChange, badge }) {
+  return (
+    <div className={`${s.settingRow} ${disabled ? s.settingDisabled : ''}`}>
+      <div className={s.settingCopy}>
+        <div className={s.settingTitleLine}>
+          <strong>{title}</strong>
+          {badge && <span>{badge}</span>}
+        </div>
+        <p>{description}</p>
+      </div>
+      <button
+        type="button"
+        className={`${s.switch} ${checked ? s.switchOn : ''}`}
+        role="switch"
+        aria-checked={checked}
+        aria-label={title}
+        disabled={disabled}
+        onClick={() => !disabled && onChange(!checked)}
+      >
+        <span />
+      </button>
+    </div>
+  )
+}
+
 export default function Account({ user: userFromApp, onUserUpdated, onLogout }) {
   const fileInputRef = useRef(null)
   const [user, setUser] = useState(userFromApp || null)
   const [form, setForm] = useState(() => normalizeUser(userFromApp))
+  const [preferences, setPreferences] = useState(() => normalizePreferences(userFromApp?.preferences, userFromApp?.has_telegram !== false))
   const [avatarFile, setAvatarFile] = useState(null)
   const [avatarPreview, setAvatarPreview] = useState('')
   const [avatarRemoved, setAvatarRemoved] = useState(false)
@@ -52,13 +111,17 @@ export default function Account({ user: userFromApp, onUserUpdated, onLogout }) 
       if (!value || cancelled) return
       setUser(value)
       setForm(normalizeUser(value))
+      setPreferences(normalizePreferences(value.preferences, value.has_telegram))
       setAvatarRemoved(false)
       setAvatarBroken(false)
     }
 
     if (userFromApp) applyUser(userFromApp)
-    else getMe().then(applyUser).catch(error => {
-      if (!cancelled) setMessage({ type: 'error', text: error?.message || 'Не вдалося завантажити профіль.' })
+
+    getMe().then(applyUser).catch(error => {
+      if (!cancelled && !userFromApp) {
+        setMessage({ type: 'error', text: error?.message || 'Не вдалося завантажити профіль.' })
+      }
     }).finally(() => { if (!cancelled) setLoading(false) })
 
     return () => { cancelled = true }
@@ -85,12 +148,21 @@ export default function Account({ user: userFromApp, onUserUpdated, onLogout }) 
   const dirty = useMemo(() => {
     if (!user) return false
     const fieldsChanged = Object.keys(EMPTY_FORM).some(key => (form[key] || '') !== (normalizeUser(user)[key] || ''))
-    return fieldsChanged || Boolean(avatarFile) || avatarRemoved
-  }, [avatarFile, avatarRemoved, form, user])
+    const preferencesChanged = JSON.stringify(preferences) !== JSON.stringify(normalizePreferences(user.preferences, user.has_telegram))
+    return fieldsChanged || preferencesChanged || Boolean(avatarFile) || avatarRemoved
+  }, [avatarFile, avatarRemoved, form, preferences, user])
 
   function changeField(key, value) {
     setMessage({ type: '', text: '' })
     setForm(current => ({ ...current, [key]: value }))
+  }
+
+  function changePreference(group, key, value) {
+    setMessage({ type: '', text: '' })
+    setPreferences(current => ({
+      ...current,
+      [group]: { ...current[group], [key]: value },
+    }))
   }
 
   function chooseAvatar() {
@@ -144,6 +216,7 @@ export default function Account({ user: userFromApp, onUserUpdated, onLogout }) 
         username: form.username.trim() || null,
         birth_date: form.birth_date || null,
         language: form.language,
+        preferences,
       })
 
       if (avatarRemoved) updated = await removeAvatar()
@@ -156,8 +229,9 @@ export default function Account({ user: userFromApp, onUserUpdated, onLogout }) 
       setAvatarBroken(false)
       setUser(updated)
       setForm(normalizeUser(updated))
+      setPreferences(normalizePreferences(updated.preferences, updated.has_telegram))
       onUserUpdated?.(updated)
-      setMessage({ type: 'success', text: 'Профіль успішно оновлено.' })
+      setMessage({ type: 'success', text: 'Профіль і налаштування успішно оновлено.' })
     } catch (error) {
       setMessage({ type: 'error', text: error?.message || 'Не вдалося зберегти зміни.' })
     } finally {
@@ -169,6 +243,7 @@ export default function Account({ user: userFromApp, onUserUpdated, onLogout }) 
     if (!user) return
     if (avatarPreview) URL.revokeObjectURL(avatarPreview)
     setForm(normalizeUser(user))
+    setPreferences(normalizePreferences(user.preferences, user.has_telegram))
     setAvatarFile(null)
     setAvatarPreview('')
     setAvatarRemoved(false)
@@ -247,17 +322,17 @@ export default function Account({ user: userFromApp, onUserUpdated, onLogout }) 
           </button>
         </aside>
 
-        <section className={s.formCard}>
-          <div className={s.cardHeader}>
-            <div>
-              <span>Особиста інформація</span>
-              <h2>Налаштування профілю</h2>
-              <p>Ці дані використовуються у списках друзів, подіях та спільних побажаннях.</p>
+        <form className={s.settingsColumn} onSubmit={handleSave}>
+          <section className={s.formCard}>
+            <div className={s.cardHeader}>
+              <div>
+                <span>Особиста інформація</span>
+                <h2>Налаштування профілю</h2>
+                <p>Ці дані використовуються у списках друзів, подіях та спільних побажаннях.</p>
+              </div>
+              <div className={s.headerIcon}><AppIcon name="profile" size={23} /></div>
             </div>
-            <div className={s.headerIcon}><AppIcon name="profile" size={23} /></div>
-          </div>
 
-          <form onSubmit={handleSave}>
             <div className={s.formGrid}>
               <label className={s.field}>
                 <span>Ім’я та прізвище</span>
@@ -305,12 +380,138 @@ export default function Account({ user: userFromApp, onUserUpdated, onLogout }) 
                 <small>Налаштування мови зберігається у профілі.</small>
               </label>
             </div>
+          </section>
 
-            <div className={s.privacyNote}>
-              <div className={s.privacyIcon}><AppIcon name="shield" size={20} /></div>
+          <section className={s.formCard}>
+            <div className={s.cardHeader}>
               <div>
-                <strong>Твої дані під контролем</strong>
-                <p>Дата народження використовується тільки для нагадувань, а пароль від Google чи Telegram у Wishlle не зберігається.</p>
+                <span>Приватність</span>
+                <h2>Хто бачить твої дані</h2>
+                <p>Обери, яку інформацію можуть переглядати інші користувачі Wishlle.</p>
+              </div>
+              <div className={s.headerIcon}><AppIcon name="shield" size={23} /></div>
+            </div>
+
+            <div className={s.visibilityGrid}>
+              <label className={s.field}>
+                <span>Видимість профілю</span>
+                <select
+                  value={preferences.privacy.profile_visibility}
+                  onChange={event => changePreference('privacy', 'profile_visibility', event.target.value)}
+                >
+                  <option value="public">Усі користувачі</option>
+                  <option value="friends">Лише друзі</option>
+                  <option value="private">Тільки я</option>
+                </select>
+                <small>Визначає, хто може відкрити сторінку твого профілю.</small>
+              </label>
+
+              <label className={s.field}>
+                <span>Видимість списків побажань</span>
+                <select
+                  value={preferences.privacy.wishlists_visibility}
+                  onChange={event => changePreference('privacy', 'wishlists_visibility', event.target.value)}
+                >
+                  <option value="public">Усі користувачі</option>
+                  <option value="friends">Лише друзі</option>
+                  <option value="private">Тільки я</option>
+                </select>
+                <small>Окремий список надалі зможе мати власне налаштування доступу.</small>
+              </label>
+            </div>
+
+            <div className={s.settingsList}>
+              <ToggleSetting
+                title="Показувати дату народження"
+                description="Друзі бачитимуть дату та зможуть отримувати нагадування."
+                checked={preferences.privacy.show_birth_date}
+                onChange={value => changePreference('privacy', 'show_birth_date', value)}
+              />
+              <ToggleSetting
+                title="Показувати нікнейм"
+                description="Нікнейм відображатиметься у профілі, списках друзів і подіях."
+                checked={preferences.privacy.show_username}
+                onChange={value => changePreference('privacy', 'show_username', value)}
+              />
+              <ToggleSetting
+                title="Дозволити пошук за нікнеймом"
+                description="Інші користувачі зможуть знайти тебе через пошук Wishlle."
+                checked={preferences.privacy.searchable_by_username}
+                onChange={value => changePreference('privacy', 'searchable_by_username', value)}
+              />
+              <ToggleSetting
+                title="Дозволити запити в друзі"
+                description="Користувачі зможуть надсилати тобі запрошення до списку друзів."
+                checked={preferences.privacy.allow_friend_requests}
+                onChange={value => changePreference('privacy', 'allow_friend_requests', value)}
+              />
+            </div>
+          </section>
+
+          <section className={s.formCard}>
+            <div className={s.cardHeader}>
+              <div>
+                <span>Сповіщення</span>
+                <h2>Що тобі нагадувати</h2>
+                <p>Налаштуй події, про які Wishlle має повідомляти в застосунку або Telegram.</p>
+              </div>
+              <div className={s.headerIcon}><AppIcon name="bell" size={23} /></div>
+            </div>
+
+            <div className={s.settingsList}>
+              <ToggleSetting
+                title="Сповіщення в застосунку"
+                description="Показувати нові повідомлення у центрі сповіщень Wishlle."
+                checked={preferences.notifications.in_app}
+                onChange={value => changePreference('notifications', 'in_app', value)}
+              />
+              <ToggleSetting
+                title="Сповіщення в Telegram"
+                description={user?.has_telegram ? 'Надсилати активні нагадування через бота Wishlle.' : 'Доступно після входу або прив’язки Telegram.'}
+                badge={user?.has_telegram ? 'Підключено' : 'Не підключено'}
+                checked={preferences.notifications.telegram}
+                disabled={!user?.has_telegram}
+                onChange={value => changePreference('notifications', 'telegram', value)}
+              />
+              <ToggleSetting
+                title="Нагадування про події"
+                description="Повідомляти перед створеними подіями та святами."
+                checked={preferences.notifications.event_reminders}
+                onChange={value => changePreference('notifications', 'event_reminders', value)}
+              />
+              <ToggleSetting
+                title="Дні народження друзів"
+                description="Нагадувати про найближчі дні народження користувачів у друзях."
+                checked={preferences.notifications.birthday_reminders}
+                onChange={value => changePreference('notifications', 'birthday_reminders', value)}
+              />
+              <ToggleSetting
+                title="Запити в друзі"
+                description="Повідомляти про нові запрошення та зміни їхнього статусу."
+                checked={preferences.notifications.friend_requests}
+                onChange={value => changePreference('notifications', 'friend_requests', value)}
+              />
+              <ToggleSetting
+                title="Резервування подарунків"
+                description="Повідомляти про зміну статусу товарів у твоїх списках без розкриття сюрпризу."
+                checked={preferences.notifications.reservations}
+                onChange={value => changePreference('notifications', 'reservations', value)}
+              />
+              <ToggleSetting
+                title="Оновлення списків друзів"
+                description="Повідомляти, коли друзі додають нові бажання до доступних списків."
+                checked={preferences.notifications.wishlist_updates}
+                onChange={value => changePreference('notifications', 'wishlist_updates', value)}
+              />
+            </div>
+          </section>
+
+          <section className={s.saveCard}>
+            <div className={s.saveInfo}>
+              <AppIcon name="shield" size={20} />
+              <div>
+                <strong>Налаштування зберігаються в акаунті</strong>
+                <p>Вони застосовуються і у вебверсії, і в Telegram Mini App.</p>
               </div>
             </div>
 
@@ -328,8 +529,8 @@ export default function Account({ user: userFromApp, onUserUpdated, onLogout }) 
                 {saving ? 'Зберігаємо…' : 'Зберегти зміни'}
               </button>
             </div>
-          </form>
-        </section>
+          </section>
+        </form>
       </div>
 
       <section className={s.securityCard}>
