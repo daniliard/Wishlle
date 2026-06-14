@@ -249,6 +249,10 @@ export async function getMyEvents() {
   return request(`${BACKEND_URL}/api/events`)
 }
 
+export async function getEventInvitations() {
+  return request(`${BACKEND_URL}/api/events/invitations`)
+}
+
 export async function getEventDetails(eventId) {
   return request(`${BACKEND_URL}/api/events/${eventId}`)
 }

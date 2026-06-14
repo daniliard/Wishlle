@@ -84,7 +84,13 @@ export default function NotificationBell({ onNav }) {
     if (n.type === 'friend_request') {
       window.dispatchEvent(new Event('wishlle:friend-requests-changed'))
     }
+    if (n.type === 'event_invite' && n.related_id) {
+      sessionStorage.setItem('wishlle:open-event-id', n.related_id)
+    }
     if (n.nav) onNav?.(n.nav)
+    if (n.type === 'event_invite') {
+      setTimeout(() => window.dispatchEvent(new Event('wishlle:open-event-invite')), 80)
+    }
     setOpen(false)
   }
 
@@ -136,13 +142,13 @@ export default function NotificationBell({ onNav }) {
                   <div className={s.body}>
                     <div className={s.title}>{n.title}</div>
                     {n.body && <div className={s.text}>{n.body}</div>}
-                    {n.type === 'friend_request' && (
+                    {(n.type === 'friend_request' || n.type === 'event_invite') && (
                       <div className={s.actionHint}>{tr('Натисни, щоб відповісти', 'Tap to respond')}</div>
                     )}
                     <div className={s.time}>{timeAgo(n.created_at, language)}</div>
                   </div>
                   {!n.is_read && <span className={s.unreadDot} />}
-                  {n.type !== 'friend_request' && (
+                  {n.type !== 'friend_request' && n.type !== 'event_invite' && (
                     <span className={s.del} onClick={e => handleDelete(e, n.id)}><AppIcon name="close" size={13} /></span>
                   )}
                 </button>
