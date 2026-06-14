@@ -1,66 +1,223 @@
 import { useState, useEffect } from 'react'
 import Footer from '../components/Footer'
-import { getCatalog, getMyLists, createItem } from '../api/client'
+import AppIcon from '../components/AppIcons'
+import { getCatalog, getCatalogCategories, getMyLists, addCatalogItemToList } from '../api/client'
 import { useLanguage } from '../i18n/LanguageContext'
+import s from './Catalog.module.css'
+
+// Базові категорії з іконками. Якщо в каталозі є інші — додаються динамічно.
+const CATEGORY_ICONS = {
+  'Техніка': '💻', 'Гаджети': '📱', 'Одяг': '👟', 'Дім': '🏠',
+  'Ігри': '🎮', 'Книги': '📚', 'Краса': '💄', 'Спорт': '⚽',
+}
 
 export default function Catalog({ onNav }) {
   const { tr, locale } = useLanguage()
-  const categories = [
-    { icon: '✨', value: 'all', label: tr('Всі', 'All') },
-    { icon: '💻', value: 'Техніка', label: tr('Техніка', 'Tech') },
-    { icon: '📱', value: 'Гаджети', label: tr('Гаджети', 'Gadgets') },
-    { icon: '👟', value: 'Одяг', label: tr('Одяг', 'Clothing') },
-    { icon: '🏠', value: 'Дім', label: tr('Дім', 'Home') },
-    { icon: '🎮', value: 'Ігри', label: tr('Ігри', 'Games') },
-    { icon: '📚', value: 'Книги', label: tr('Книги', 'Books') },
-  ]
+
   const [products, setProducts] = useState([])
+  const [categories, setCategories] = useState([])
   const [myLists, setMyLists] = useState([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
-  const [activeCat, setActiveCat] = useState(0)
+  const [activeCat, setActiveCat] = useState('all')
   const [adding, setAdding] = useState(null)
   const [addedTo, setAddedTo] = useState({})
   const [pickFor, setPickFor] = useState(null)
+  const [detail, setDetail] = useState(null)
+  const [message, setMessage] = useState({ type: '', text: '' })
 
-  useEffect(() => { loadCatalog(); loadLists() }, [])
-  async function loadCatalog() { setLoading(true); try { const data = await getCatalog(); setProducts(Array.isArray(data) ? data : []) } catch { setProducts([]) } finally { setLoading(false) } }
-  async function loadLists() { try { const data = await getMyLists(); setMyLists(Array.isArray(data) ? data : []) } catch { setMyLists([]) } }
+  useEffect(() => { loadAll() }, [])
 
-  async function handleAddToList(product, listId) {
-    const list = myLists.find(l => l.id === listId)
-    setAdding(product.id)
+  async function loadAll() {
+    setLoading(true)
     try {
-      await createItem({ title: product.title, url: product.url || null, price: product.price || null, image_url: product.image_url || null, wishlist_id: listId, status: 'available' })
-      setAddedTo(prev => ({ ...prev, [product.id]: list?.title || tr('Список', 'List') }))
-      setPickFor(null)
-      setTimeout(() => setAddedTo(prev => { const next = { ...prev }; delete next[product.id]; return next }), 2500)
-    } catch (e) { alert(e.message) }
-    finally { setAdding(null) }
+      const [prod, cats, lists] = await Promise.all([
+        getCatalog(),
+        getCatalogCategories().catch(() => []),
+        getMyLists().catch(() => []),
+      ])
+      setProducts(Array.isArray(prod) ? prod : [])
+      setCategories(Array.isArray(cats) ? cats : [])
+      setMyLists(Array.isArray(lists) ? lists : [])
+    } catch {
+      setProducts([])
+    } finally {
+      setLoading(false)
+    }
   }
 
+  async function handleAdd(product, listId) {
+    const list = myLists.find(l => l.id === listId)
+    setAdding(product.id)
+    setMessage({ type: '', text: '' })
+    try {
+      await addCatalogItemToList(product.id, listId)
+      setAddedTo(prev => ({ ...prev, [product.id]: list?.title || tr('Список', 'List') }))
+      setPickFor(null)
+      setDetail(null)
+      setMessage({ type: 'success', text: tr(`Додано до «${list?.title}»`, `Added to "${list?.title}"`) })
+      setTimeout(() => setAddedTo(prev => { const n = { ...prev }; delete n[product.id]; return n }), 3000)
+    } catch (e) {
+      setMessage({ type: 'error', text: e?.message || tr('Не вдалося додати.', 'Could not add.') })
+    } finally {
+      setAdding(null)
+    }
+  }
+
+  // Клік «В список»: якщо немає списків — на сторінку списків,
+  // якщо один — одразу додаємо, якщо декілька — пікер.
+  function startAdd(product) {
+    if (myLists.length === 0) { onNav('lists'); return }
+    if (myLists.length === 1) { handleAdd(product, myLists[0].id); return }
+    setPickFor(product)
+  }
+
+  const allCategories = [
+    { value: 'all', label: tr('Всі', 'All'), icon: '✨' },
+    ...categories.map(c => ({ value: c.value, label: c.value, icon: CATEGORY_ICONS[c.value] || '🏷️', count: c.count })),
+  ]
+
   const filtered = products.filter(p => {
-    const matchSearch = p.title?.toLowerCase().includes(search.toLowerCase())
-    const selected = categories[activeCat]
-    const matchCat = selected?.value === 'all' || p.category === selected?.value
+    const matchSearch = !search || p.title?.toLowerCase().includes(search.toLowerCase())
+    const matchCat = activeCat === 'all' || p.category === activeCat
     return matchSearch && matchCat
   })
 
+  const fmtPrice = p => p.price != null
+    ? `${Number(p.price).toLocaleString(locale)} ${p.currency === 'USD' ? '$' : p.currency === 'EUR' ? '€' : '₴'}`
+    : null
+
   return (
-    <div className="anim-fade-up"><div className="wrap">
-      <div className="content-toolbar content-toolbar--simple"><div><strong>{products.length} {tr('товарів у каталозі', 'items in the catalog')}</strong><span>{tr('Обери ідею та додай її до потрібного списку', 'Choose an idea and add it to the right list')}</span></div></div>
-      <div style={{ display: 'grid', gridTemplateColumns: '200px 1fr', gap: 24, paddingTop: 36 }} className="catalog-layout">
-        <div style={{ position: 'sticky', top: 84, alignSelf: 'start' }} className="catalog-sidebar"><div style={{ marginBottom: 8 }}><div style={{ fontSize: '0.65rem', fontWeight: 800, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '1.5px', marginBottom: 10 }}>{tr('Категорії', 'Categories')}</div>{categories.map((c, i) => <div key={c.value} onClick={() => setActiveCat(i)} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', borderRadius: 10, fontSize: '0.82rem', fontWeight: 600, cursor: 'pointer', marginBottom: 2, transition: 'all 0.2s', color: activeCat === i ? 'var(--cyan)' : 'var(--muted)', background: activeCat === i ? 'var(--cyan-glow)' : 'transparent' }}><span style={{ width: 20 }}>{c.icon}</span><span>{c.label}</span></div>)}</div></div>
-        <div><div className="search-wrap"><span className="s-icon">🔍</span><input type="text" placeholder={tr('Пошук у каталозі...', 'Search catalog...')} value={search} onChange={e => setSearch(e.target.value)} /></div>
-          {loading ? <div style={{ textAlign: 'center', padding: '60px 0', color: 'var(--muted)' }}>{tr('Завантаження...', 'Loading...')}</div> : filtered.length === 0 ? <div style={{ textAlign: 'center', padding: '60px 0', color: 'var(--muted)' }}><div style={{ fontSize: '2.5rem', marginBottom: 12 }}>🔍</div><div>{tr('Нічого не знайдено', 'Nothing found')}</div></div> : <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(170px, 1fr))', gap: 14, marginBottom: 60 }}>{filtered.map(p => <div key={p.id} style={{ background: 'var(--surface)', border: `1px solid ${addedTo[p.id] ? 'rgba(34,211,122,0.4)' : 'var(--border)'}`, borderRadius: 18, overflow: 'hidden', position: 'relative', transition: 'all 0.25s' }} onMouseEnter={e => { if (!addedTo[p.id]) { const overlay = e.currentTarget.querySelector('.ov'); if (overlay) overlay.style.opacity = '1' } }} onMouseLeave={e => { const overlay = e.currentTarget.querySelector('.ov'); if (overlay) overlay.style.opacity = '0' }}>
-            <div style={{ aspectRatio: '1', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '2.6rem', background: 'rgba(0,200,232,0.04)' }}>{p.image_url ? <img src={p.image_url} alt={p.title} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : '🎁'}</div>
-            <div style={{ padding: '10px 12px 12px' }}><div style={{ fontWeight: 700, fontSize: '0.8rem', marginBottom: 4, lineHeight: 1.3, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{p.title}</div>{p.price && <div style={{ fontWeight: 900, fontSize: '0.88rem', color: 'var(--cyan)' }}>{Number(p.price).toLocaleString(locale)} ₴</div>}</div>
-            {addedTo[p.id] ? <div style={{ position: 'absolute', inset: 0, background: 'rgba(34,211,122,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 6 }}><div style={{ fontSize: '1.5rem' }}>✓</div><div style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--green)', textAlign: 'center', padding: '0 8px' }}>{tr('Додано до', 'Added to')} «{addedTo[p.id]}»</div></div> : <div className="ov" style={{ position: 'absolute', inset: 0, background: 'rgba(0,200,232,0.1)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: 0, transition: 'opacity 0.2s' }}>{myLists.length === 0 ? <button className="btn-cyan" style={{ fontSize: '0.78rem', padding: '8px 14px' }} onClick={() => onNav('lists')}>{tr('Створи список', 'Create a list')} →</button> : myLists.length === 1 ? <button className="btn-cyan" style={{ fontSize: '0.78rem', padding: '8px 14px' }} onClick={() => handleAddToList(p, myLists[0].id)} disabled={adding === p.id}>{adding === p.id ? '...' : `＋ ${tr('В список', 'Add to list')}`}</button> : <button className="btn-cyan" style={{ fontSize: '0.78rem', padding: '8px 14px' }} onClick={() => setPickFor(p)}>＋ {tr('В список', 'Add to list')}</button>}</div>}
-          </div>)}</div>}
+    <div className="anim-fade-up">
+      <div className="wrap">
+        <section className={s.pageHero}>
+          <div>
+            <span>{tr('ІДЕЇ ДЛЯ ПОДАРУНКІВ', 'GIFT IDEAS')}</span>
+            <h1>{tr('Каталог', 'Catalog')}</h1>
+            <p>{tr('Підбірка ідей. Обери товар і додай його до власного списку побажань.', 'A selection of ideas. Pick an item and add it to your own wishlist.')}</p>
+          </div>
+          <div className={s.heroBadge}>
+            <span>🛍️</span>
+            <div><strong>{products.length}</strong><small>{tr('товарів', 'items')}</small></div>
+          </div>
+        </section>
+
+        {message.text && (
+          <div className={`${s.notice} ${message.type === 'error' ? s.noticeError : s.noticeSuccess}`}>
+            <span>{message.text}</span>
+            <button onClick={() => setMessage({ type: '', text: '' })}>×</button>
+          </div>
+        )}
+
+        <div className={s.layout}>
+          <aside className={s.sidebar}>
+            <div className={s.sidebarTitle}>{tr('Категорії', 'Categories')}</div>
+            {allCategories.map(c => (
+              <button key={c.value} className={activeCat === c.value ? s.catActive : ''} onClick={() => setActiveCat(c.value)}>
+                <span className={s.catIcon}>{c.icon}</span>
+                <span className={s.catLabel}>{c.label}</span>
+                {c.count != null && <b>{c.count}</b>}
+              </button>
+            ))}
+          </aside>
+
+          <div>
+            <div className={s.searchBox}>
+              <AppIcon name="search" size={18} />
+              <input value={search} onChange={e => setSearch(e.target.value)} placeholder={tr('Пошук у каталозі...', 'Search catalog...')} />
+              {search && <button onClick={() => setSearch('')}><AppIcon name="close" size={15} /></button>}
+            </div>
+
+            {loading ? (
+              <div className={s.loading}><div className="auth-spinner" />{tr('Завантажуємо каталог…', 'Loading catalog…')}</div>
+            ) : filtered.length === 0 ? (
+              <div className={s.empty}>
+                <div>🔍</div>
+                <h2>{products.length === 0 ? tr('Каталог порожній', 'Catalog is empty') : tr('Нічого не знайдено', 'Nothing found')}</h2>
+                <p>{products.length === 0 ? tr('Товари додає адміністратор через панель керування.', 'Items are added by the administrator.') : tr('Спробуй іншу категорію або запит.', 'Try another category or query.')}</p>
+              </div>
+            ) : (
+              <div className={s.grid}>
+                {filtered.map(p => {
+                  const added = addedTo[p.id]
+                  return (
+                    <article key={p.id} className={`${s.card} ${added ? s.cardAdded : ''}`} onClick={() => setDetail(p)}>
+                      <div className={s.cardImage}>
+                        {p.image_url ? <img src={p.image_url} alt={p.title} /> : <span>🎁</span>}
+                        {p.is_featured && <div className={s.featuredBadge}>★ {tr('Топ', 'Top')}</div>}
+                      </div>
+                      <div className={s.cardBody}>
+                        {p.category && <div className={s.cardCat}>{CATEGORY_ICONS[p.category] || '🏷️'} {p.category}</div>}
+                        <h3>{p.title}</h3>
+                        {fmtPrice(p) && <div className={s.cardPrice}>{fmtPrice(p)}</div>}
+                      </div>
+                      <div className={s.cardActions} onClick={e => e.stopPropagation()}>
+                        {added ? (
+                          <div className={s.addedState}><AppIcon name="check" size={14} /> {tr('Додано', 'Added')}</div>
+                        ) : (
+                          <button className={s.addBtn} onClick={() => startAdd(p)} disabled={adding === p.id}>
+                            <AppIcon name="plus" size={14} />
+                            {adding === p.id ? tr('Додаємо…', 'Adding…') : tr('У список', 'To list')}
+                          </button>
+                        )}
+                      </div>
+                    </article>
+                  )
+                })}
+              </div>
+            )}
+          </div>
         </div>
-      </div><Footer /></div>
-      {pickFor && <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(8px)', zIndex: 500, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }} onClick={e => e.target === e.currentTarget && setPickFor(null)}><div style={{ background: '#0f1e2e', border: '1px solid var(--border2)', borderRadius: 22, padding: 24, width: '100%', maxWidth: 360 }}><div style={{ fontWeight: 900, fontSize: '1rem', marginBottom: 16 }}>{tr('В який список?', 'Which list?')}</div>{myLists.map(l => <div key={l.id} onClick={() => handleAddToList(pickFor, l.id)} style={{ padding: '11px 14px', borderRadius: 12, border: '1px solid var(--border)', marginBottom: 8, cursor: 'pointer', fontWeight: 700, fontSize: '0.88rem', transition: 'all 0.2s' }} onMouseEnter={e => { e.currentTarget.style.borderColor = 'rgba(0,200,232,0.4)'; e.currentTarget.style.color = 'var(--cyan)' }} onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.color = '' }}>{l.emoji || '🎁'} {l.title}</div>)}<button className="btn-outline" style={{ width: '100%', marginTop: 8 }} onClick={() => setPickFor(null)}>{tr('Скасувати', 'Cancel')}</button></div></div>}
-      <style>{`@media (max-width: 768px) { .catalog-layout { grid-template-columns: 1fr !important; } .catalog-sidebar { display: none; } }`}</style>
+
+        <Footer />
+      </div>
+
+      {/* Деталі товару */}
+      {detail && (
+        <div className={s.backdrop} onMouseDown={() => setDetail(null)}>
+          <div className={s.detailModal} onMouseDown={e => e.stopPropagation()}>
+            <button className={s.detailClose} onClick={() => setDetail(null)}><AppIcon name="close" size={18} /></button>
+            <div className={s.detailImage}>
+              {detail.image_url ? <img src={detail.image_url} alt={detail.title} /> : <span>🎁</span>}
+            </div>
+            <div className={s.detailBody}>
+              {detail.category && <div className={s.cardCat}>{CATEGORY_ICONS[detail.category] || '🏷️'} {detail.category}</div>}
+              <h2>{detail.title}</h2>
+              {fmtPrice(detail) && <div className={s.detailPrice}>{fmtPrice(detail)}</div>}
+              {detail.description && <p className={s.detailDesc}>{detail.description}</p>}
+              <div className={s.detailActions}>
+                {detail.product_url && (
+                  <a className="btn-outline" href={detail.product_url} target="_blank" rel="noreferrer">
+                    <AppIcon name="link" size={15} /> {tr('Купити', 'Buy')}
+                  </a>
+                )}
+                {addedTo[detail.id] ? (
+                  <button className="btn-primary" disabled><AppIcon name="check" size={15} /> {tr('Додано', 'Added')}</button>
+                ) : (
+                  <button className="btn-primary" onClick={() => startAdd(detail)} disabled={adding === detail.id}>
+                    <AppIcon name="plus" size={15} /> {adding === detail.id ? tr('Додаємо…', 'Adding…') : tr('Додати в список', 'Add to list')}
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Пікер списку */}
+      {pickFor && (
+        <div className={s.backdrop} onMouseDown={() => setPickFor(null)}>
+          <div className={s.pickerModal} onMouseDown={e => e.stopPropagation()}>
+            <div className={s.pickerTitle}>{tr('У який список додати?', 'Which list to add to?')}</div>
+            {myLists.map(l => (
+              <button key={l.id} className={s.pickerItem} onClick={() => handleAdd(pickFor, l.id)} disabled={adding === pickFor.id}>
+                <span>{l.emoji || '🎁'}</span> {l.title}
+              </button>
+            ))}
+            <button className="btn-outline" style={{ width: '100%', marginTop: 8 }} onClick={() => setPickFor(null)}>{tr('Скасувати', 'Cancel')}</button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

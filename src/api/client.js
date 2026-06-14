@@ -280,8 +280,24 @@ export async function syncBirthdayEvents() {
 }
 
 // ── Catalog ───────────────────────────────────────────────────────────────
-export async function getCatalog() {
-  return directus('/items/catalog_items?sort[]=sort_order&limit=50')
+export async function getCatalog(params = {}) {
+  const qs = new URLSearchParams()
+  if (params.category && params.category !== 'all') qs.set('category', params.category)
+  if (params.search) qs.set('search', params.search)
+  if (params.featured) qs.set('featured', 'true')
+  const query = qs.toString()
+  return request(`${BACKEND_URL}/api/catalog${query ? '?' + query : ''}`)
+}
+
+export async function getCatalogCategories() {
+  return request(`${BACKEND_URL}/api/catalog/categories`)
+}
+
+export async function addCatalogItemToList(itemId, wishlistId) {
+  return request(`${BACKEND_URL}/api/catalog/${itemId}/add-to-list`, {
+    method: 'POST',
+    body: JSON.stringify({ wishlist_id: wishlistId }),
+  })
 }
 
 // ── Завершення браузерного OAuth (обмін code → токен) ───────────────────────
