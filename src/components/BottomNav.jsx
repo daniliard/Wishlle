@@ -7,9 +7,9 @@ export default function BottomNav({ current, onNav }) {
   const items = [
     { id: 'home', icon: 'home', label: tr('Головна', 'Home') },
     { id: 'lists', icon: 'lists', label: tr('Списки', 'Lists') },
-    { id: 'catalog', icon: 'catalog', label: tr('Каталог', 'Catalog') },
     { id: 'friends', icon: 'friends', label: tr('Друзі', 'Friends') },
-    { id: 'account', icon: 'profile', label: tr('Профіль', 'Profile') },
+    { id: 'events', icon: 'events', label: tr('Події', 'Events') },
+    { id: 'catalog', icon: 'catalog', label: tr('Каталог', 'Catalog') },
   ]
 
   return (

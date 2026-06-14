@@ -62,6 +62,39 @@ function eventIcon(event) {
   return custom || TYPE_META[event?.event_type]?.icon || '📅'
 }
 
+function eventLocalParts(value) {
+  const raw = String(value || '').trim()
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return { event_date: raw, event_time: '18:00' }
+  const date = value ? new Date(value) : null
+  if (!date || Number.isNaN(date.getTime())) return { event_date: '', event_time: '18:00' }
+  const pad = number => String(number).padStart(2, '0')
+  return {
+    event_date: `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`,
+    event_time: `${pad(date.getHours())}:${pad(date.getMinutes())}`,
+  }
+}
+
+function eventIso(dateValue, timeValue) {
+  if (!dateValue || !timeValue) return ''
+  const local = new Date(`${dateValue}T${timeValue}:00`)
+  return Number.isNaN(local.getTime()) ? '' : local.toISOString()
+}
+
+function formatEventDateTime(value, locale, options = {}) {
+  if (!value) return ''
+  const raw = String(value).trim()
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return ''
+  const hasTime = raw.includes('T') || raw.includes(' ')
+  return date.toLocaleString(locale, {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+    ...(hasTime ? { hour: '2-digit', minute: '2-digit' } : {}),
+    ...options,
+  })
+}
+
 export default function Events() {
   const { tr, locale, language } = useLanguage()
   const myId = getUserId()
@@ -384,7 +417,7 @@ export default function Events() {
                           {pending && <span className={s.invitedTag}>{tr('очікує відповіді', 'awaiting response')}</span>}
                         </div>
                         <div className={s.eventMeta}>
-                          <span>{event.event_date ? new Date(event.event_date).toLocaleDateString(locale, { day: 'numeric', month: 'long', year: 'numeric' }) : ''}</span>
+                          <span>{event.event_date ? formatEventDateTime(event.event_date, locale) : ''}</span>
                           {event.location && <span>· 📍 {event.location}</span>}
                           <span>· 👥 {event.participants_count}</span>
                           <span className={s.typeBadge}>{event.event_type === 'private' ? tr('Приватна', 'Private') : tr('Групова', 'Group')}</span>
@@ -507,7 +540,7 @@ function HonoreePicker({ friends, selected, onSelect, tr }) {
 }
 
 function CreateEventModal({ friends, busy, tr, onClose, onCreate }) {
-  const [form, setForm] = useState({ title: '', description: '', event_date: '', location: '', event_type: 'private', honoree_id: '', cover_image: '🎂' })
+  const [form, setForm] = useState({ title: '', description: '', event_date: '', event_time: '18:00', location: '', event_type: 'private', honoree_id: '', cover_image: '🎂' })
   const [selectedParticipants, setSelectedParticipants] = useState([])
 
   function toggleParticipant(friendId) {
@@ -515,11 +548,11 @@ function CreateEventModal({ friends, busy, tr, onClose, onCreate }) {
   }
 
   function submit() {
-    if (!form.title.trim() || !form.event_date || (form.event_type === 'private' && !form.honoree_id)) return
+    if (!form.title.trim() || !form.event_date || !form.event_time || (form.event_type === 'private' && !form.honoree_id)) return
     onCreate({
       title: form.title.trim(),
       description: form.description.trim() || null,
-      event_date: form.event_date,
+      event_date: eventIso(form.event_date, form.event_time),
       location: form.location.trim() || null,
       event_type: form.event_type,
       honoree_id: form.event_type === 'private' ? form.honoree_id : null,
@@ -537,8 +570,9 @@ function CreateEventModal({ friends, busy, tr, onClose, onCreate }) {
       {form.event_type === 'private' && <HonoreePicker friends={friends} selected={form.honoree_id} onSelect={honoree_id => setForm(current => ({ ...current, honoree_id }))} tr={tr} />}
       <div className={s.row2}>
         <label className={s.field}><span>{tr('Дата', 'Date')}</span><input type="date" value={form.event_date} onChange={event => setForm(current => ({ ...current, event_date: event.target.value }))} /></label>
-        <label className={s.field}><span>{tr('Місце (необов’язково)', 'Location (optional)')}</span><input value={form.location} onChange={event => setForm(current => ({ ...current, location: event.target.value }))} maxLength={255} placeholder={tr('Кафе, дім, …', 'Cafe, home, …')} /></label>
+        <label className={s.field}><span>{tr('Точний час', 'Exact time')}</span><input type="time" value={form.event_time} onChange={event => setForm(current => ({ ...current, event_time: event.target.value }))} /></label>
       </div>
+      <label className={s.field}><span>{tr('Місце (необов’язково)', 'Location (optional)')}</span><input value={form.location} onChange={event => setForm(current => ({ ...current, location: event.target.value }))} maxLength={255} placeholder={tr('Кафе, дім, …', 'Cafe, home, …')} /></label>
       <label className={s.field}><span>{tr('Опис (необов’язково)', 'Description (optional)')}</span><textarea value={form.description} onChange={event => setForm(current => ({ ...current, description: event.target.value }))} rows={3} placeholder={tr('Деталі події…', 'Event details…')} /></label>
       <div className={s.field}>
         <span>{tr('Запросити друзів', 'Invite friends')} {selectedParticipants.length > 0 && `· ${selectedParticipants.length}`}</span>
@@ -552,16 +586,18 @@ function CreateEventModal({ friends, busy, tr, onClose, onCreate }) {
           </div>
         )}
       </div>
-      <div className={s.modalActions}><button className="btn-outline" onClick={onClose} disabled={busy}>{tr('Скасувати', 'Cancel')}</button><button className="btn-primary" onClick={submit} disabled={busy || !form.title.trim() || !form.event_date || (form.event_type === 'private' && !form.honoree_id)}>{busy ? tr('Створюємо…', 'Creating…') : tr('Створити й запросити', 'Create and invite')}</button></div>
+      <div className={s.modalActions}><button className="btn-outline" onClick={onClose} disabled={busy}>{tr('Скасувати', 'Cancel')}</button><button className="btn-primary" onClick={submit} disabled={busy || !form.title.trim() || !form.event_date || !form.event_time || (form.event_type === 'private' && !form.honoree_id)}>{busy ? tr('Створюємо…', 'Creating…') : tr('Створити й запросити', 'Create and invite')}</button></div>
     </Modal>
   )
 }
 
 function EditEventModal({ event, friends, busy, tr, onClose, onSave }) {
+  const initialMoment = eventLocalParts(event.event_date)
   const [form, setForm] = useState({
     title: event.title || '',
     description: event.description || '',
-    event_date: event.event_date ? String(event.event_date).slice(0, 10) : '',
+    event_date: initialMoment.event_date,
+    event_time: initialMoment.event_time,
     location: event.location || '',
     event_type: event.event_type || 'group',
     honoree_id: event.honoree_id || '',
@@ -569,11 +605,11 @@ function EditEventModal({ event, friends, busy, tr, onClose, onSave }) {
   })
 
   function submit() {
-    if (!form.title.trim() || !form.event_date || (form.event_type === 'private' && !form.honoree_id)) return
+    if (!form.title.trim() || !form.event_date || !form.event_time || (form.event_type === 'private' && !form.honoree_id)) return
     onSave({
       title: form.title.trim(),
       description: form.description.trim() || null,
-      event_date: form.event_date,
+      event_date: eventIso(form.event_date, form.event_time),
       location: form.location.trim() || null,
       event_type: form.event_type,
       honoree_id: form.event_type === 'private' ? form.honoree_id : null,
@@ -590,10 +626,11 @@ function EditEventModal({ event, friends, busy, tr, onClose, onSave }) {
       {form.event_type === 'private' && <HonoreePicker friends={friends} selected={form.honoree_id} onSelect={honoree_id => setForm(current => ({ ...current, honoree_id }))} tr={tr} />}
       <div className={s.row2}>
         <label className={s.field}><span>{tr('Дата', 'Date')}</span><input type="date" value={form.event_date} onChange={input => setForm(current => ({ ...current, event_date: input.target.value }))} /></label>
-        <label className={s.field}><span>{tr('Місце', 'Location')}</span><input value={form.location} onChange={input => setForm(current => ({ ...current, location: input.target.value }))} maxLength={255} /></label>
+        <label className={s.field}><span>{tr('Точний час', 'Exact time')}</span><input type="time" value={form.event_time} onChange={input => setForm(current => ({ ...current, event_time: input.target.value }))} /></label>
       </div>
+      <label className={s.field}><span>{tr('Місце', 'Location')}</span><input value={form.location} onChange={input => setForm(current => ({ ...current, location: input.target.value }))} maxLength={255} /></label>
       <label className={s.field}><span>{tr('Опис', 'Description')}</span><textarea value={form.description} onChange={input => setForm(current => ({ ...current, description: input.target.value }))} rows={3} /></label>
-      <div className={s.modalActions}><button className="btn-outline" onClick={onClose} disabled={busy}>{tr('Скасувати', 'Cancel')}</button><button className="btn-primary" onClick={submit} disabled={busy || !form.title.trim() || !form.event_date || (form.event_type === 'private' && !form.honoree_id)}><AppIcon name="check" size={15} />{busy ? tr('Зберігаємо…', 'Saving…') : tr('Зберегти зміни', 'Save changes')}</button></div>
+      <div className={s.modalActions}><button className="btn-outline" onClick={onClose} disabled={busy}>{tr('Скасувати', 'Cancel')}</button><button className="btn-primary" onClick={submit} disabled={busy || !form.title.trim() || !form.event_date || !form.event_time || (form.event_type === 'private' && !form.honoree_id)}><AppIcon name="check" size={15} />{busy ? tr('Зберігаємо…', 'Saving…') : tr('Зберегти зміни', 'Save changes')}</button></div>
     </Modal>
   )
 }
@@ -619,7 +656,7 @@ function EventDetailModal({ detail, friends, myId, busy, tr, locale, onClose, on
   return (
     <Modal onClose={onClose} wide>
       <div className={s.modalHead}>
-        <div><span>{detail.event_type === 'private' ? tr('ПРИВАТНА ПОДІЯ', 'PRIVATE EVENT') : tr('ГРУПОВА ПОДІЯ', 'GROUP EVENT')}</span><h2>{eventIcon(detail)} {detail.title}</h2><p>{detail.event_date ? new Date(detail.event_date).toLocaleDateString(locale, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }) : ''}{days !== null && days >= 0 && ` · ${days === 0 ? tr('сьогодні', 'today') : days === 1 ? tr('завтра', 'tomorrow') : tr(`через ${days} дн.`, `in ${days} days`)}`}</p></div>
+        <div><span>{detail.event_type === 'private' ? tr('ПРИВАТНА ПОДІЯ', 'PRIVATE EVENT') : tr('ГРУПОВА ПОДІЯ', 'GROUP EVENT')}</span><h2>{eventIcon(detail)} {detail.title}</h2><p>{detail.event_date ? formatEventDateTime(detail.event_date, locale, { weekday: 'long' }) : ''}{days !== null && days >= 0 && ` · ${days === 0 ? tr('сьогодні', 'today') : days === 1 ? tr('завтра', 'tomorrow') : tr(`через ${days} дн.`, `in ${days} days`)}`}</p></div>
         <div className={s.modalHeadButtons}>{detail.is_owner && !detail.is_auto && <button onClick={onEdit} title={tr('Редагувати', 'Edit')}><AppIcon name="edit" size={16} /></button>}<button onClick={onClose}><AppIcon name="close" size={18} /></button></div>
       </div>
 

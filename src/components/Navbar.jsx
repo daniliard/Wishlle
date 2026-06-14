@@ -11,7 +11,6 @@ function initials(user) {
 
 export default function Navbar({ current, onNav, onLogout, user }) {
   const { tr } = useLanguage()
-  const [searchOpen, setSearchOpen] = useState(false)
   const [dropOpen, setDropOpen] = useState(false)
   const dropdownRef = useRef(null)
 
@@ -51,14 +50,6 @@ export default function Navbar({ current, onNav, onLogout, user }) {
       </nav>
 
       <div className={s.right}>
-        <div className={`${s.searchWrap} ${searchOpen ? s.open : ''}`}>
-          <input type="search" placeholder={tr('Знайти користувача...', 'Find a user...')} aria-label={tr('Пошук користувача', 'User search')} />
-        </div>
-
-        <button type="button" className={s.iconBtn} onClick={() => setSearchOpen(value => !value)} aria-label={tr('Пошук', 'Search')}>
-          <AppIcon name="search" size={18} />
-        </button>
-
         <NotificationBell onNav={navigate} />
 
         <div className={s.profileWrap} ref={dropdownRef}>

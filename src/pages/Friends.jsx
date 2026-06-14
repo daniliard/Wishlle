@@ -18,8 +18,8 @@ import {
 import { useLanguage } from '../i18n/LanguageContext'
 import s from './Friends.module.css'
 
-const QUICK_TAGS_UK = ['Родина', 'Друзі', 'Навчання', 'Робота', 'Ігри']
-const QUICK_TAGS_EN = ['Family', 'Friends', 'Study', 'Work', 'Games']
+const QUICK_TAGS_UK = ['Родичі', 'Друзі']
+const QUICK_TAGS_EN = ['Family', 'Friends']
 
 function initials(user, nickname = '') {
   const source = nickname || user?.display_name || user?.username || 'W'

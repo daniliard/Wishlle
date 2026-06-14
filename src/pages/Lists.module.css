@@ -30,6 +30,7 @@
 .listEmoji { position: relative; z-index: 1; font-size: 2.75rem; filter: drop-shadow(0 8px 16px rgba(0,0,0,.25)); }
 .visibilityBadge { position: absolute; top: 11px; right: 11px; z-index: 2; padding: 5px 9px; border: 1px solid rgba(255,255,255,.09); border-radius: 99px; backdrop-filter: blur(10px); font-size: .57rem; font-weight: 900; }
 .publicBadge { background: rgba(34,211,122,.1); color: #56e59a; }
+.friendsBadge { background: rgba(0,200,232,.11); color: #66e8f4; }
 .privateBadge { background: rgba(255,255,255,.07); color: rgba(255,255,255,.62); }
 .listBody { padding: 16px; }
 .listTitleRow { display: flex; justify-content: space-between; gap: 12px; }
@@ -75,6 +76,7 @@
 .detailEmoji { width: 78px; height: 78px; display: grid; place-items: center; flex: 0 0 78px; border: 1px solid rgba(0,200,232,.14); border-radius: 23px; background: rgba(0,200,232,.07); font-size: 2.45rem; }
 .detailCopy span { display: inline-block; margin-bottom: 7px; padding: 4px 8px; border-radius: 99px; font-size: .56rem; font-weight: 900; }
 .detailPublic { background: rgba(34,211,122,.1); color: #56e59a; }
+.detailFriends { background: rgba(0,200,232,.11); color: #66e8f4; }
 .detailPrivate { background: rgba(255,255,255,.07); color: var(--muted); }
 .detailCopy h1 { font-size: clamp(1.35rem, 3vw, 2rem); }
 .detailCopy p { margin-top: 7px; color: var(--muted); font-size: .68rem; }
@@ -111,7 +113,7 @@
 .emojiPicker { display: flex; flex-wrap: wrap; gap: 7px; }
 .emojiPicker button { width: 43px; height: 43px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); font-size: 1.25rem; cursor: pointer; }
 .emojiPicker button:hover, .emojiPicker .emojiActive { border-color: rgba(0,200,232,.5); background: rgba(0,200,232,.1); transform: translateY(-1px); }
-.visibilityOptions { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; }
+.visibilityOptions { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 9px; }
 .visibilityOptions button { display: flex; align-items: center; gap: 11px; padding: 13px; text-align: left; border: 1px solid var(--border); border-radius: 13px; background: var(--surface); color: var(--text); cursor: pointer; }
 .visibilityOptions button > span { font-size: 1.25rem; }
 .visibilityOptions strong { display: block; font-size: .7rem; }

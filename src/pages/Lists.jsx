@@ -16,6 +16,17 @@ import { useLanguage } from '../i18n/LanguageContext'
 import s from './Lists.module.css'
 
 const EMOJIS = ['🎁', '🎂', '🎮', '💻', '✈️', '🏠', '👟', '📚', '🎧', '✨']
+
+function listVisibility(list) {
+  if (['public', 'friends', 'private'].includes(list?.visibility)) return list.visibility
+  return list?.is_public === false ? 'private' : 'public'
+}
+
+function visibilityMeta(value, tr) {
+  if (value === 'friends') return { icon: '👥', label: tr('Для друзів', 'Friends only') }
+  if (value === 'private') return { icon: '🔒', label: tr('Приватний', 'Private') }
+  return { icon: '🌍', label: tr('Публічний', 'Public') }
+}
 function formatDate(value, locale, tr) {
   if (!value) return tr('Щойно створено', 'Just created')
   const date = new Date(value)
@@ -55,7 +66,7 @@ function ListModal({ list, onClose, onSave }) {
   const [form, setForm] = useState({
     title: list?.title || '',
     emoji: list?.emoji || '🎁',
-    is_public: list?.is_public ?? true,
+    visibility: listVisibility(list),
   })
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
@@ -115,19 +126,15 @@ function ListModal({ list, onClose, onSave }) {
         <div className={s.field}>
           <span>{tr('Видимість', 'Visibility')}</span>
           <div className={s.visibilityOptions}>
-            <button
-              type="button"
-              className={form.is_public ? s.visibilityActive : ''}
-              onClick={() => setForm(current => ({ ...current, is_public: true }))}
-            >
+            <button type="button" className={form.visibility === 'public' ? s.visibilityActive : ''} onClick={() => setForm(current => ({ ...current, visibility: 'public' }))}>
               <span>🌍</span>
-              <div><strong>{tr('Публічний', 'Public')}</strong><small>{tr('Друзі зможуть переглядати список', 'Friends will be able to view the list')}</small></div>
+              <div><strong>{tr('Публічний', 'Public')}</strong><small>{tr('Доступний усім користувачам', 'Visible to all users')}</small></div>
             </button>
-            <button
-              type="button"
-              className={!form.is_public ? s.visibilityActive : ''}
-              onClick={() => setForm(current => ({ ...current, is_public: false }))}
-            >
+            <button type="button" className={form.visibility === 'friends' ? s.visibilityActive : ''} onClick={() => setForm(current => ({ ...current, visibility: 'friends' }))}>
+              <span>👥</span>
+              <div><strong>{tr('Для друзів', 'Friends only')}</strong><small>{tr('Відкривається лише підтвердженим друзям', 'Visible only to confirmed friends')}</small></div>
+            </button>
+            <button type="button" className={form.visibility === 'private' ? s.visibilityActive : ''} onClick={() => setForm(current => ({ ...current, visibility: 'private' }))}>
               <span>🔒</span>
               <div><strong>{tr('Приватний', 'Private')}</strong><small>{tr('Список бачиш лише ти', 'Only you can see this list')}</small></div>
             </button>
@@ -290,12 +297,13 @@ function ItemModal({ item, onClose, onSave }) {
 function Stats({ lists }) {
   const { tr, locale } = useLanguage()
   const totalItems = lists.reduce((sum, list) => sum + Number(list.items_count || 0), 0)
-  const publicCount = lists.filter(list => list.is_public).length
-  const privateCount = lists.length - publicCount
+  const publicCount = lists.filter(list => listVisibility(list) === 'public').length
+  const friendsCount = lists.filter(list => listVisibility(list) === 'friends').length
+  const privateCount = lists.filter(list => listVisibility(list) === 'private').length
   const cards = [
     { icon: 'lists', value: lists.length, label: tr('списків', 'lists') },
     { icon: 'gift', value: totalItems, label: tr('бажань', 'wishes') },
-    { icon: 'friends', value: publicCount, label: tr('публічних', 'public') },
+    { icon: 'friends', value: friendsCount, label: tr('для друзів', 'friends only') },
     { icon: 'shield', value: privateCount, label: tr('приватних', 'private') },
   ]
 
@@ -319,9 +327,11 @@ function ListCard({ list, onOpen, onEdit, onDelete }) {
       <div className={s.listCover}>
         <div className={s.coverGlow} />
         <span className={s.listEmoji}>{list.emoji || '🎁'}</span>
-        <span className={`${s.visibilityBadge} ${list.is_public ? s.publicBadge : s.privateBadge}`}>
-          {list.is_public ? `🌍 ${tr('Публічний', 'Public')}` : `🔒 ${tr('Приватний', 'Private')}`}
-        </span>
+        {(() => {
+          const visibility = listVisibility(list)
+          const meta = visibilityMeta(visibility, tr)
+          return <span className={`${s.visibilityBadge} ${visibility === 'public' ? s.publicBadge : visibility === 'friends' ? s.friendsBadge : s.privateBadge}`}>{meta.icon} {meta.label}</span>
+        })()}
       </div>
       <div className={s.listBody}>
         <div className={s.listTitleRow}>
@@ -378,7 +388,11 @@ function WishlistDetail({ list, items, loading, onBack, onAdd, onEditList, onEdi
       <section className={s.detailHero}>
         <div className={s.detailEmoji}>{list.emoji || '🎁'}</div>
         <div className={s.detailCopy}>
-          <span className={list.is_public ? s.detailPublic : s.detailPrivate}>{list.is_public ? `🌍 ${tr('Публічний список', 'Public list')}` : `🔒 ${tr('Приватний список', 'Private list')}`}</span>
+          {(() => {
+            const visibility = listVisibility(list)
+            const meta = visibilityMeta(visibility, tr)
+            return <span className={visibility === 'public' ? s.detailPublic : visibility === 'friends' ? s.detailFriends : s.detailPrivate}>{meta.icon} {meta.label}</span>
+          })()}
           <h1>{list.title}</h1>
           <p>{items.length} {items.length === 1 ? tr('бажання', 'wish') : tr('бажань', 'wishes')} · {tr('створено', 'created')} {formatDate(list.date_created, locale, tr).toLowerCase()}</p>
         </div>
@@ -432,6 +446,7 @@ export default function Lists() {
   const filters = [
     { value: 'all', label: tr('Усі списки', 'All lists') },
     { value: 'public', label: tr('Публічні', 'Public') },
+    { value: 'friends', label: tr('Для друзів', 'Friends only') },
     { value: 'private', label: tr('Приватні', 'Private') },
   ]
   const [lists, setLists] = useState([])
@@ -538,7 +553,7 @@ export default function Lists() {
 
   const filteredLists = useMemo(() => lists.filter(list => {
     const matchesSearch = list.title.toLowerCase().includes(search.trim().toLowerCase())
-    const matchesFilter = filter === 'all' || (filter === 'public' ? list.is_public : !list.is_public)
+    const matchesFilter = filter === 'all' || listVisibility(list) === filter
     return matchesSearch && matchesFilter
   }), [filter, lists, search])
 
