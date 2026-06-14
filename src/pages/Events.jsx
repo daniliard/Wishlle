@@ -110,9 +110,11 @@ export default function Events() {
       openDetail(eventId)
     }
     const timer = setTimeout(openRequestedEvent, 100)
+    window.addEventListener('wishlle:open-event', openRequestedEvent)
     window.addEventListener('wishlle:open-event-invite', openRequestedEvent)
     return () => {
       clearTimeout(timer)
+      window.removeEventListener('wishlle:open-event', openRequestedEvent)
       window.removeEventListener('wishlle:open-event-invite', openRequestedEvent)
     }
   }, [])

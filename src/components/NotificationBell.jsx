@@ -84,12 +84,12 @@ export default function NotificationBell({ onNav }) {
     if (n.type === 'friend_request') {
       window.dispatchEvent(new Event('wishlle:friend-requests-changed'))
     }
-    if (n.type === 'event_invite' && n.related_id) {
+    if ((n.type === 'event_invite' || n.type === 'event_reminder') && n.related_id) {
       sessionStorage.setItem('wishlle:open-event-id', n.related_id)
     }
     if (n.nav) onNav?.(n.nav)
-    if (n.type === 'event_invite') {
-      setTimeout(() => window.dispatchEvent(new Event('wishlle:open-event-invite')), 80)
+    if (n.type === 'event_invite' || n.type === 'event_reminder') {
+      setTimeout(() => window.dispatchEvent(new Event('wishlle:open-event')), 80)
     }
     setOpen(false)
   }
