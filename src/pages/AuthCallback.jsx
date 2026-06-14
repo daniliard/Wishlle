@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react'
 import { publishAuthResult } from '../auth/browserTelegram'
+import { useLanguage } from '../i18n/LanguageContext'
 
 export default function AuthCallback() {
-  const [status, setStatus] = useState('Завершуємо вхід…')
+  const { tr } = useLanguage()
+  const [status, setStatus] = useState(tr('Завершуємо вхід…', 'Completing sign-in…'))
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
@@ -14,32 +16,24 @@ export default function AuthCallback() {
     }
 
     if (!payload.code && !payload.error) {
-      setStatus('Telegram не повернув дані авторизації.')
+      setStatus(tr('Telegram не повернув дані авторизації.', 'Telegram did not return authentication data.'))
       return
     }
 
     publishAuthResult(payload)
-
     const message = { type: 'wishlle_tg_auth_result', payload }
 
-    try {
-      window.opener?.postMessage(message, window.location.origin)
-    } catch {
-      // Результат уже передано через localStorage/BroadcastChannel.
-    }
+    try { window.opener?.postMessage(message, window.location.origin) } catch {}
 
-    setStatus(payload.error ? 'Вхід скасовано.' : 'Готово! Закриваємо вікно…')
+    setStatus(payload.error ? tr('Вхід скасовано.', 'Sign-in cancelled.') : tr('Готово! Закриваємо вікно…', 'Done! Closing the window…'))
 
     setTimeout(() => {
       window.close()
-
       setTimeout(() => {
-        if (!window.closed) {
-          setStatus('Вхід завершено. Це вікно можна закрити.')
-        }
+        if (!window.closed) setStatus(tr('Вхід завершено. Це вікно можна закрити.', 'Sign-in complete. You can close this window.'))
       }, 500)
     }, 250)
-  }, [])
+  }, [tr])
 
   return (
     <div className="auth-screen">

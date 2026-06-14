@@ -12,6 +12,7 @@ import AuthCallback from './pages/AuthCallback'
 import { getMe, isLoggedIn, loginTelegram, logout } from './api/client'
 import { completeStoredBrowserLogin } from './auth/browserTelegram'
 import { isTelegramMiniApp, looksLikeTelegramLaunch, telegramReady, waitForTelegramInitData } from './auth/telegram'
+import { useLanguage } from './i18n/LanguageContext'
 
 const PAGES = {
   home: Home,
@@ -23,11 +24,9 @@ const PAGES = {
 }
 
 export default function App() {
+  const { setLanguage, tr } = useLanguage()
   const authParams = new URLSearchParams(window.location.search)
-  const isOAuthCallback =
-    window.location.pathname === '/auth/callback' ||
-    authParams.has('code') ||
-    authParams.has('error')
+  const isOAuthCallback = window.location.pathname === '/auth/callback' || authParams.has('code') || authParams.has('error')
 
   const [page, setPage] = useState('home')
   const [auth, setAuth] = useState(() => isLoggedIn())
@@ -35,15 +34,16 @@ export default function App() {
   const [bootState, setBootState] = useState('checking')
   const [bootError, setBootError] = useState('')
 
-  const refreshUser = async () => {
-    const current = await getMe()
+  const applyUser = (current) => {
     setUser(current || null)
+    if (current?.language) setLanguage(current.language)
     return current
   }
 
+  const refreshUser = async () => applyUser(await getMe())
+
   useEffect(() => {
     if (isOAuthCallback) return
-
     let cancelled = false
 
     const boot = async () => {
@@ -76,7 +76,7 @@ export default function App() {
         }
       } catch (error) {
         console.error('Wishlle auth boot failed:', error)
-        if (!cancelled) setBootError(error?.message || 'Помилка авторизації через Telegram.')
+        if (!cancelled) setBootError(error?.message || tr('Помилка авторизації через Telegram.', 'Telegram authentication failed.'))
       } finally {
         if (!cancelled) setBootState('ready')
       }
@@ -98,7 +98,7 @@ export default function App() {
       <div className="auth-screen">
         <div className="auth-screen__card">
           <div className="auth-spinner" aria-hidden="true" />
-          <p>{isTelegramMiniApp() || looksLikeTelegramLaunch() ? 'Входимо через Telegram…' : 'Завантажуємо Wishlle…'}</p>
+          <p>{isTelegramMiniApp() || looksLikeTelegramLaunch() ? tr('Входимо через Telegram…', 'Signing in with Telegram…') : tr('Завантажуємо Wishlle…', 'Loading Wishlle…')}</p>
         </div>
       </div>
     )
@@ -108,10 +108,10 @@ export default function App() {
     return bootError && isTelegramMiniApp() ? (
       <div className="auth-screen">
         <div className="auth-screen__card auth-screen__card--error">
-          <h2>Не вдалося увійти</h2>
+          <h2>{tr('Не вдалося увійти', 'Could not sign in')}</h2>
           <p>{bootError}</p>
           <button type="button" className="btn-primary" onClick={() => window.location.reload()}>
-            Спробувати ще раз
+            {tr('Спробувати ще раз', 'Try again')}
           </button>
         </div>
       </div>
@@ -144,7 +144,7 @@ export default function App() {
         <PageComponent
           onNav={navigate}
           user={user}
-          onUserUpdated={(updatedUser) => setUser(updatedUser)}
+          onUserUpdated={(updatedUser) => applyUser(updatedUser)}
           onLogout={handleLogout}
         />
       </div>

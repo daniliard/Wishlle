@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import AppIcon from '../components/AppIcons'
 import { getMe, removeAvatar, updateMe, uploadAvatar } from '../api/client'
+import { useLanguage } from '../i18n/LanguageContext'
 import s from './Account.module.css'
 
 const EMPTY_FORM = {
@@ -92,6 +93,7 @@ function ToggleSetting({ title, description, checked, disabled = false, onChange
 }
 
 export default function Account({ user: userFromApp, onUserUpdated, onLogout }) {
+  const { tr, setLanguage } = useLanguage()
   const fileInputRef = useRef(null)
   const [user, setUser] = useState(userFromApp || null)
   const [form, setForm] = useState(() => normalizeUser(userFromApp))
@@ -111,6 +113,7 @@ export default function Account({ user: userFromApp, onUserUpdated, onLogout }) 
       if (!value || cancelled) return
       setUser(value)
       setForm(normalizeUser(value))
+      setLanguage(normalizeUser(value).language)
       setPreferences(normalizePreferences(value.preferences, value.has_telegram))
       setAvatarRemoved(false)
       setAvatarBroken(false)
@@ -120,7 +123,7 @@ export default function Account({ user: userFromApp, onUserUpdated, onLogout }) 
 
     getMe().then(applyUser).catch(error => {
       if (!cancelled && !userFromApp) {
-        setMessage({ type: 'error', text: error?.message || 'Не вдалося завантажити профіль.' })
+        setMessage({ type: 'error', text: error?.message || tr('Не вдалося завантажити профіль.', 'Could not load profile.') })
       }
     }).finally(() => { if (!cancelled) setLoading(false) })
 
@@ -140,8 +143,8 @@ export default function Account({ user: userFromApp, onUserUpdated, onLogout }) 
 
   const usernameError = useMemo(() => {
     if (!form.username) return ''
-    if (form.username.length < 3) return 'Нікнейм має містити щонайменше 3 символи.'
-    if (!/^[a-zA-Z0-9_]+$/.test(form.username)) return 'Дозволені лише латинські літери, цифри та символ _.'
+    if (form.username.length < 3) return tr('Нікнейм має містити щонайменше 3 символи.', 'Username must contain at least 3 characters.')
+    if (!/^[a-zA-Z0-9_]+$/.test(form.username)) return tr('Дозволені лише латинські літери, цифри та символ _.', 'Only Latin letters, numbers and the underscore are allowed.')
     return ''
   }, [form.username])
 
@@ -175,11 +178,11 @@ export default function Account({ user: userFromApp, onUserUpdated, onLogout }) 
     if (!file) return
 
     if (!ALLOWED_AVATAR_TYPES.includes(file.type)) {
-      setMessage({ type: 'error', text: 'Обери фото у форматі JPG, PNG або WEBP.' })
+      setMessage({ type: 'error', text: tr('Обери фото у форматі JPG, PNG або WEBP.', 'Choose a JPG, PNG or WEBP image.') })
       return
     }
     if (file.size > MAX_AVATAR_SIZE) {
-      setMessage({ type: 'error', text: 'Фото завелике. Максимальний розмір — 5 МБ.' })
+      setMessage({ type: 'error', text: tr('Фото завелике. Максимальний розмір — 5 МБ.', 'The image is too large. Maximum size is 5 MB.') })
       return
     }
 
@@ -229,11 +232,12 @@ export default function Account({ user: userFromApp, onUserUpdated, onLogout }) 
       setAvatarBroken(false)
       setUser(updated)
       setForm(normalizeUser(updated))
+      setLanguage(normalizeUser(updated).language)
       setPreferences(normalizePreferences(updated.preferences, updated.has_telegram))
       onUserUpdated?.(updated)
-      setMessage({ type: 'success', text: 'Профіль і налаштування успішно оновлено.' })
+      setMessage({ type: 'success', text: tr('Профіль і налаштування успішно оновлено.', 'Profile and settings updated successfully.') })
     } catch (error) {
-      setMessage({ type: 'error', text: error?.message || 'Не вдалося зберегти зміни.' })
+      setMessage({ type: 'error', text: error?.message || tr('Не вдалося зберегти зміни.', 'Could not save changes.') })
     } finally {
       setSaving(false)
     }
@@ -243,6 +247,7 @@ export default function Account({ user: userFromApp, onUserUpdated, onLogout }) 
     if (!user) return
     if (avatarPreview) URL.revokeObjectURL(avatarPreview)
     setForm(normalizeUser(user))
+    setLanguage(normalizeUser(user).language)
     setPreferences(normalizePreferences(user.preferences, user.has_telegram))
     setAvatarFile(null)
     setAvatarPreview('')
@@ -254,18 +259,18 @@ export default function Account({ user: userFromApp, onUserUpdated, onLogout }) 
   if (loading) {
     return (
       <div className={s.page}>
-        <div className={s.loadingCard}><div className="auth-spinner" /><span>Завантажуємо профіль…</span></div>
+        <div className={s.loadingCard}><div className="auth-spinner" /><span>{tr('Завантажуємо профіль…', 'Loading profile…')}</span></div>
       </div>
     )
   }
 
   const profileHint = !form.birth_date
-    ? 'Додай дату народження — друзі отримають нагадування перед святом.'
+    ? tr('Додай дату народження — друзі отримають нагадування перед святом.', 'Add your birth date so friends can get a reminder before the celebration.')
     : !form.username
-      ? 'Створи унікальний нікнейм, щоб друзі могли швидко тебе знайти.'
+      ? tr('Створи унікальний нікнейм, щоб друзі могли швидко тебе знайти.', 'Create a unique username so friends can find you quickly.')
       : progress < 100
-        ? 'Додай фото профілю, щоб тебе було легше впізнати у списках і подіях.'
-        : 'Профіль заповнений — можна переходити до списків побажань.'
+        ? tr('Додай фото профілю, щоб тебе було легше впізнати у списках і подіях.', 'Add a profile photo so you are easier to recognize in lists and events.')
+        : tr('Профіль заповнений — можна переходити до списків побажань.', 'Your profile is complete—you can move on to wishlists.')
 
   return (
     <div className={s.page}>
@@ -274,10 +279,10 @@ export default function Account({ user: userFromApp, onUserUpdated, onLogout }) 
           <div className={s.avatarWrap}>
             <div className={s.avatar}>
               {shownAvatar && !avatarBroken
-                ? <img src={shownAvatar} alt="Аватар" referrerPolicy="no-referrer" onError={() => setAvatarBroken(true)} />
+                ? <img src={shownAvatar} alt={tr('Аватар', 'Avatar')} referrerPolicy="no-referrer" onError={() => setAvatarBroken(true)} />
                 : <span>{initials({ ...user, ...form })}</span>}
             </div>
-            <span className={s.onlineDot} title="Обліковий запис активний" />
+            <span className={s.onlineDot} title={tr('Обліковий запис активний', 'Account is active')} />
           </div>
 
           <input
@@ -288,34 +293,34 @@ export default function Account({ user: userFromApp, onUserUpdated, onLogout }) 
             onChange={handleAvatarChange}
           />
 
-          <h2>{form.display_name || form.username || 'Користувач Wishlle'}</h2>
+          <h2>{form.display_name || form.username || tr('Користувач Wishlle', 'Wishlle user')}</h2>
           {form.username && <p className={s.username}>@{form.username}</p>}
 
           <div className={s.avatarActions}>
-            <button type="button" onClick={chooseAvatar}><AppIcon name="upload" size={15} /> Змінити фото</button>
-            {shownAvatar && <button type="button" className={s.removeAvatar} onClick={handleAvatarRemove} aria-label="Видалити фото"><AppIcon name="trash" size={15} /></button>}
+            <button type="button" onClick={chooseAvatar}><AppIcon name="upload" size={15} /> {tr('Змінити фото', 'Change photo')}</button>
+            {shownAvatar && <button type="button" className={s.removeAvatar} onClick={handleAvatarRemove} aria-label={tr('Видалити фото', 'Remove photo')}><AppIcon name="trash" size={15} /></button>}
           </div>
-          <p className={s.avatarNote}>JPG, PNG або WEBP · до 5 МБ</p>
+          <p className={s.avatarNote}>JPG, PNG {tr('або', 'or')} WEBP · {tr('до 5 МБ', 'up to 5 MB')}</p>
 
           <span className={s.providerBadge}>
             {user?.auth_provider === 'google' ? 'G' : user?.auth_provider === 'telegram' ? '➤' : 'W'}
-            Вхід через {providerLabel(user?.auth_provider)}
+            {tr('Вхід через', 'Signed in with')} {providerLabel(user?.auth_provider)}
           </span>
 
           <div className={s.completion}>
-            <div className={s.completionRow}><span>Заповнення профілю</span><strong>{progress}%</strong></div>
+            <div className={s.completionRow}><span>{tr('Заповнення профілю', 'Profile completion')}</span><strong>{progress}%</strong></div>
             <div className={s.progress}><span style={{ width: `${progress}%` }} /></div>
             <p>{profileHint}</p>
           </div>
 
           <div className={s.summaryDivider} />
           <div className={s.accountInfo}>
-            <div><span>ID користувача</span><strong>{user?.id || '—'}</strong></div>
-            <div><span>Спосіб входу</span><strong>{providerLabel(user?.auth_provider)}</strong></div>
+            <div><span>{tr('ID користувача', 'User ID')}</span><strong>{user?.id || '—'}</strong></div>
+            <div><span>{tr('Спосіб входу', 'Sign-in method')}</span><strong>{providerLabel(user?.auth_provider)}</strong></div>
           </div>
 
           <button type="button" className={s.logoutButton} onClick={onLogout}>
-            <AppIcon name="logout" size={18} /> Вийти з акаунта
+            <AppIcon name="logout" size={18} /> {tr('Вийти з акаунта', 'Log out')}
           </button>
         </aside>
 
@@ -323,28 +328,28 @@ export default function Account({ user: userFromApp, onUserUpdated, onLogout }) 
           <section className={s.formCard}>
             <div className={s.cardHeader}>
               <div>
-                <span>Особиста інформація</span>
-                <h2>Налаштування профілю</h2>
-                <p>Ці дані використовуються у списках друзів, подіях та спільних побажаннях.</p>
+                <span>{tr('Особиста інформація', 'Personal information')}</span>
+                <h2>{tr('Налаштування профілю', 'Profile settings')}</h2>
+                <p>{tr('Ці дані використовуються у списках друзів, подіях та спільних побажаннях.', 'This information is used in friend lists, events and shared wishes.')}</p>
               </div>
               <div className={s.headerIcon}><AppIcon name="profile" size={23} /></div>
             </div>
 
             <div className={s.formGrid}>
               <label className={s.field}>
-                <span>Ім’я та прізвище</span>
+                <span>{tr('Ім’я та прізвище', 'Full name')}</span>
                 <input
                   type="text"
                   value={form.display_name}
                   maxLength={100}
-                  placeholder="Наприклад, Даніл Молодорич"
+                  placeholder={tr('Наприклад, Даніл Молодорич', 'For example, Dan Molodorych')}
                   onChange={event => changeField('display_name', event.target.value)}
                 />
-                <small>Відображається друзям і учасникам подій.</small>
+                <small>{tr('Відображається друзям і учасникам подій.', 'Shown to friends and event participants.')}</small>
               </label>
 
               <label className={s.field}>
-                <span>Нікнейм</span>
+                <span>{tr('Нікнейм', 'Username')}</span>
                 <div className={`${s.inputPrefix} ${usernameError ? s.inputError : ''}`}><b>@</b><input
                   type="text"
                   value={form.username}
@@ -354,27 +359,27 @@ export default function Account({ user: userFromApp, onUserUpdated, onLogout }) 
                   spellCheck="false"
                   onChange={event => changeField('username', event.target.value.replace(/\s+/g, ''))}
                 /></div>
-                <small className={usernameError ? s.fieldError : ''}>{usernameError || 'За ним інші користувачі зможуть знайти тебе.'}</small>
+                <small className={usernameError ? s.fieldError : ''}>{usernameError || tr('За ним інші користувачі зможуть знайти тебе.', 'Other users will be able to find you by it.')}</small>
               </label>
 
               <label className={s.field}>
-                <span>Дата народження</span>
+                <span>{tr('Дата народження', 'Birth date')}</span>
                 <input
                   type="date"
                   value={form.birth_date}
                   max={new Date().toISOString().slice(0, 10)}
                   onChange={event => changeField('birth_date', event.target.value)}
                 />
-                <small>Використовується для нагадувань друзям.</small>
+                <small>{tr('Використовується для нагадувань друзям.', 'Used for reminders to friends.')}</small>
               </label>
 
               <label className={s.field}>
-                <span>Мова інтерфейсу</span>
-                <select value={form.language} onChange={event => changeField('language', event.target.value)}>
+                <span>{tr('Мова інтерфейсу', 'Interface language')}</span>
+                <select value={form.language} onChange={event => { changeField('language', event.target.value); setLanguage(event.target.value) }}>
                   <option value="uk">Українська</option>
                   <option value="en">English</option>
                 </select>
-                <small>Налаштування мови зберігається у профілі.</small>
+                <small>{tr('Налаштування мови зберігається у профілі.', 'The language setting is saved in your profile.')}</small>
               </label>
             </div>
           </section>
@@ -382,63 +387,63 @@ export default function Account({ user: userFromApp, onUserUpdated, onLogout }) 
           <section className={s.formCard}>
             <div className={s.cardHeader}>
               <div>
-                <span>Приватність</span>
-                <h2>Хто бачить твої дані</h2>
-                <p>Обери, яку інформацію можуть переглядати інші користувачі Wishlle.</p>
+                <span>{tr('Приватність', 'Privacy')}</span>
+                <h2>{tr('Хто бачить твої дані', 'Who can see your information')}</h2>
+                <p>{tr('Обери, яку інформацію можуть переглядати інші користувачі Wishlle.', 'Choose what information other Wishlle users can view.')}</p>
               </div>
               <div className={s.headerIcon}><AppIcon name="shield" size={23} /></div>
             </div>
 
             <div className={s.visibilityGrid}>
               <label className={s.field}>
-                <span>Видимість профілю</span>
+                <span>{tr('Видимість профілю', 'Profile visibility')}</span>
                 <select
                   value={preferences.privacy.profile_visibility}
                   onChange={event => changePreference('privacy', 'profile_visibility', event.target.value)}
                 >
-                  <option value="public">Усі користувачі</option>
-                  <option value="friends">Лише друзі</option>
-                  <option value="private">Тільки я</option>
+                  <option value="public">{tr('Усі користувачі', 'All users')}</option>
+                  <option value="friends">{tr('Лише друзі', 'Friends only')}</option>
+                  <option value="private">{tr('Тільки я', 'Only me')}</option>
                 </select>
-                <small>Визначає, хто може відкрити сторінку твого профілю.</small>
+                <small>{tr('Визначає, хто може відкрити сторінку твого профілю.', 'Controls who can open your profile page.')}</small>
               </label>
 
               <label className={s.field}>
-                <span>Видимість списків побажань</span>
+                <span>{tr('Видимість списків побажань', 'Wishlist visibility')}</span>
                 <select
                   value={preferences.privacy.wishlists_visibility}
                   onChange={event => changePreference('privacy', 'wishlists_visibility', event.target.value)}
                 >
-                  <option value="public">Усі користувачі</option>
-                  <option value="friends">Лише друзі</option>
-                  <option value="private">Тільки я</option>
+                  <option value="public">{tr('Усі користувачі', 'All users')}</option>
+                  <option value="friends">{tr('Лише друзі', 'Friends only')}</option>
+                  <option value="private">{tr('Тільки я', 'Only me')}</option>
                 </select>
-                <small>Окремий список надалі зможе мати власне налаштування доступу.</small>
+                <small>{tr('Окремий список надалі зможе мати власне налаштування доступу.', 'Each list can also have its own access setting.')}</small>
               </label>
             </div>
 
             <div className={s.settingsList}>
               <ToggleSetting
-                title="Показувати дату народження"
-                description="Друзі бачитимуть дату та зможуть отримувати нагадування."
+                title={tr('Показувати дату народження', 'Show birth date')}
+                description={tr('Друзі бачитимуть дату та зможуть отримувати нагадування.', 'Friends will see the date and can receive reminders.')}
                 checked={preferences.privacy.show_birth_date}
                 onChange={value => changePreference('privacy', 'show_birth_date', value)}
               />
               <ToggleSetting
-                title="Показувати нікнейм"
-                description="Нікнейм відображатиметься у профілі, списках друзів і подіях."
+                title={tr('Показувати нікнейм', 'Show username')}
+                description={tr('Нікнейм відображатиметься у профілі, списках друзів і подіях.', 'Your username will appear in the profile, friend lists and events.')}
                 checked={preferences.privacy.show_username}
                 onChange={value => changePreference('privacy', 'show_username', value)}
               />
               <ToggleSetting
-                title="Дозволити пошук за нікнеймом"
-                description="Інші користувачі зможуть знайти тебе через пошук Wishlle."
+                title={tr('Дозволити пошук за нікнеймом', 'Allow search by username')}
+                description={tr('Інші користувачі зможуть знайти тебе через пошук Wishlle.', 'Other users will be able to find you through Wishlle search.')}
                 checked={preferences.privacy.searchable_by_username}
                 onChange={value => changePreference('privacy', 'searchable_by_username', value)}
               />
               <ToggleSetting
-                title="Дозволити запити в друзі"
-                description="Користувачі зможуть надсилати тобі запрошення до списку друзів."
+                title={tr('Дозволити запити в друзі', 'Allow friend requests')}
+                description={tr('Користувачі зможуть надсилати тобі запрошення до списку друзів.', 'Users will be able to send you friend requests.')}
                 checked={preferences.privacy.allow_friend_requests}
                 onChange={value => changePreference('privacy', 'allow_friend_requests', value)}
               />
@@ -448,55 +453,55 @@ export default function Account({ user: userFromApp, onUserUpdated, onLogout }) 
           <section className={s.formCard}>
             <div className={s.cardHeader}>
               <div>
-                <span>Сповіщення</span>
-                <h2>Що тобі нагадувати</h2>
-                <p>Налаштуй події, про які Wishlle має повідомляти в застосунку або Telegram.</p>
+                <span>{tr('Сповіщення', 'Notifications')}</span>
+                <h2>{tr('Що тобі нагадувати', 'What to notify you about')}</h2>
+                <p>{tr('Налаштуй події, про які Wishlle має повідомляти в застосунку або Telegram.', 'Choose which events Wishlle should notify you about in the app or Telegram.')}</p>
               </div>
               <div className={s.headerIcon}><AppIcon name="bell" size={23} /></div>
             </div>
 
             <div className={s.settingsList}>
               <ToggleSetting
-                title="Сповіщення в застосунку"
-                description="Показувати нові повідомлення у центрі сповіщень Wishlle."
+                title={tr('Сповіщення в застосунку', 'In-app notifications')}
+                description={tr('Показувати нові повідомлення у центрі сповіщень Wishlle.', 'Show new messages in the Wishlle notification center.')}
                 checked={preferences.notifications.in_app}
                 onChange={value => changePreference('notifications', 'in_app', value)}
               />
               <ToggleSetting
-                title="Сповіщення в Telegram"
-                description={user?.has_telegram ? 'Надсилати активні нагадування через бота Wishlle.' : 'Доступно після входу або прив’язки Telegram.'}
-                badge={user?.has_telegram ? 'Підключено' : 'Не підключено'}
+                title={tr('Сповіщення в Telegram', 'Telegram notifications')}
+                description={user?.has_telegram ? tr('Надсилати активні нагадування через бота Wishlle.', 'Send active reminders through the Wishlle bot.') : tr('Доступно після входу або прив’язки Telegram.', 'Available after signing in with or linking Telegram.')}
+                badge={user?.has_telegram ? tr('Підключено', 'Connected') : tr('Не підключено', 'Not connected')}
                 checked={preferences.notifications.telegram}
                 disabled={!user?.has_telegram}
                 onChange={value => changePreference('notifications', 'telegram', value)}
               />
               <ToggleSetting
-                title="Нагадування про події"
-                description="Повідомляти перед створеними подіями та святами."
+                title={tr('Нагадування про події', 'Event reminders')}
+                description={tr('Повідомляти перед створеними подіями та святами.', 'Notify before created events and celebrations.')}
                 checked={preferences.notifications.event_reminders}
                 onChange={value => changePreference('notifications', 'event_reminders', value)}
               />
               <ToggleSetting
-                title="Дні народження друзів"
-                description="Нагадувати про найближчі дні народження користувачів у друзях."
+                title={tr('Дні народження друзів', 'Friends’ birthdays')}
+                description={tr('Нагадувати про найближчі дні народження користувачів у друзях.', 'Remind you about upcoming birthdays of friends.')}
                 checked={preferences.notifications.birthday_reminders}
                 onChange={value => changePreference('notifications', 'birthday_reminders', value)}
               />
               <ToggleSetting
-                title="Запити в друзі"
-                description="Повідомляти про нові запрошення та зміни їхнього статусу."
+                title={tr('Запити в друзі', 'Friend requests')}
+                description={tr('Повідомляти про нові запрошення та зміни їхнього статусу.', 'Notify about new invitations and status changes.')}
                 checked={preferences.notifications.friend_requests}
                 onChange={value => changePreference('notifications', 'friend_requests', value)}
               />
               <ToggleSetting
-                title="Резервування подарунків"
-                description="Повідомляти про зміну статусу товарів у твоїх списках без розкриття сюрпризу."
+                title={tr('Резервування подарунків', 'Gift reservations')}
+                description={tr('Повідомляти про зміну статусу товарів у твоїх списках без розкриття сюрпризу.', 'Notify about item status changes in your lists without revealing the surprise.')}
                 checked={preferences.notifications.reservations}
                 onChange={value => changePreference('notifications', 'reservations', value)}
               />
               <ToggleSetting
-                title="Оновлення списків друзів"
-                description="Повідомляти, коли друзі додають нові бажання до доступних списків."
+                title={tr('Оновлення списків друзів', 'Friends’ list updates')}
+                description={tr('Повідомляти, коли друзі додають нові бажання до доступних списків.', 'Notify when friends add new wishes to visible lists.')}
                 checked={preferences.notifications.wishlist_updates}
                 onChange={value => changePreference('notifications', 'wishlist_updates', value)}
               />
@@ -507,8 +512,8 @@ export default function Account({ user: userFromApp, onUserUpdated, onLogout }) 
             <div className={s.saveInfo}>
               <AppIcon name="shield" size={20} />
               <div>
-                <strong>Налаштування зберігаються в акаунті</strong>
-                <p>Вони застосовуються і у вебверсії, і в Telegram Mini App.</p>
+                <strong>{tr('Налаштування зберігаються в акаунті', 'Settings are saved to your account')}</strong>
+                <p>{tr('Вони застосовуються і у вебверсії, і в Telegram Mini App.', 'They apply to both the web version and Telegram Mini App.')}</p>
               </div>
             </div>
 
@@ -520,10 +525,10 @@ export default function Account({ user: userFromApp, onUserUpdated, onLogout }) 
             )}
 
             <div className={s.formActions}>
-              <button type="button" className="btn-outline" disabled={!dirty || saving} onClick={resetForm}>Скасувати</button>
+              <button type="button" className="btn-outline" disabled={!dirty || saving} onClick={resetForm}>{tr('Скасувати', 'Cancel')}</button>
               <button type="submit" className="btn-primary" disabled={!dirty || saving || Boolean(usernameError)}>
                 <AppIcon name={saving ? 'sparkles' : 'check'} size={17} />
-                {saving ? 'Зберігаємо…' : 'Зберегти зміни'}
+                {saving ? tr('Зберігаємо…', 'Saving…') : tr('Зберегти зміни', 'Save changes')}
               </button>
             </div>
           </section>
@@ -533,10 +538,10 @@ export default function Account({ user: userFromApp, onUserUpdated, onLogout }) 
       <section className={s.securityCard}>
         <div className={s.securityIcon}><AppIcon name="userCheck" size={22} /></div>
         <div>
-          <h3>Авторизація без паролів</h3>
-          <p>Твій акаунт прив’язаний до {providerLabel(user?.auth_provider)}. Wishlle не зберігає пароль від Google або Telegram.</p>
+          <h3>{tr('Авторизація без паролів', 'Passwordless authentication')}</h3>
+          <p>{tr('Твій акаунт прив’язаний до', 'Your account is linked to')} {providerLabel(user?.auth_provider)}. {tr('Wishlle не зберігає пароль від Google або Telegram.', 'Wishlle does not store your Google or Telegram password.')}</p>
         </div>
-        <span className={s.secureBadge}>Захищено</span>
+        <span className={s.secureBadge}>{tr('Захищено', 'Protected')}</span>
       </section>
     </div>
   )
