@@ -255,3 +255,25 @@ export async function finishBrowserLogin(code, codeVerifier) {
   setAuth(data.access_token, data.user_id, data.user)
   return data
 }
+
+// ── Reservations (резервування подарунків) ─────────────────────────────────
+export async function viewFriendList(listId) {
+  return request(`${BACKEND_URL}/api/reservations/list/${listId}`)
+}
+
+export async function reserveItem(itemId) {
+  return request(`${BACKEND_URL}/api/reservations`, {
+    method: 'POST',
+    body: JSON.stringify({ item_id: itemId }),
+  })
+}
+
+export async function cancelReservation(itemId) {
+  return request(`${BACKEND_URL}/api/reservations/item/${itemId}`, {
+    method: 'DELETE',
+  })
+}
+
+export async function getMyReservations() {
+  return request(`${BACKEND_URL}/api/reservations/mine`)
+}

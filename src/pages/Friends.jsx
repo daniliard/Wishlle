@@ -8,6 +8,9 @@ import {
   removeFriend,
   searchUsers,
   updateFriend,
+  viewFriendList,
+  reserveItem,
+  cancelReservation,
 } from '../api/client'
 import { useLanguage } from '../i18n/LanguageContext'
 import s from './Friends.module.css'
@@ -88,6 +91,11 @@ export default function Friends() {
 
   const [details, setDetails] = useState(null)
   const [detailsLoading, setDetailsLoading] = useState(false)
+
+  // Перегляд повного списку друга + резервування
+  const [listView, setListView] = useState(null)
+  const [listViewLoading, setListViewLoading] = useState(false)
+  const [reservingId, setReservingId] = useState('')
 
   async function loadFriends() {
     setLoading(true)
@@ -243,6 +251,55 @@ export default function Friends() {
       setMessage({ type: 'error', text: error?.message || tr('Не вдалося відкрити профіль друга.', 'Could not open friend profile.') })
     } finally {
       setDetailsLoading(false)
+    }
+  }
+
+  async function openListView(listId) {
+    setListViewLoading(true)
+    setMessage({ type: '', text: '' })
+    try {
+      const data = await viewFriendList(listId)
+      setListView(data)
+    } catch (error) {
+      setMessage({ type: 'error', text: error?.message || tr('Не вдалося відкрити список.', 'Could not open the list.') })
+    } finally {
+      setListViewLoading(false)
+    }
+  }
+
+  async function refreshListView() {
+    if (!listView) return
+    try {
+      const data = await viewFriendList(listView.id)
+      setListView(data)
+    } catch { /* мовчки */ }
+  }
+
+  async function handleReserve(item) {
+    setReservingId(item.id)
+    setMessage({ type: '', text: '' })
+    try {
+      await reserveItem(item.id)
+      await refreshListView()
+      setMessage({ type: 'success', text: tr('Подарунок зарезервовано 🎁', 'Gift reserved 🎁') })
+    } catch (error) {
+      setMessage({ type: 'error', text: error?.message || tr('Не вдалося зарезервувати.', 'Could not reserve.') })
+    } finally {
+      setReservingId('')
+    }
+  }
+
+  async function handleCancelReserve(item) {
+    setReservingId(item.id)
+    setMessage({ type: '', text: '' })
+    try {
+      await cancelReservation(item.id)
+      await refreshListView()
+      setMessage({ type: 'success', text: tr('Резервування скасовано.', 'Reservation cancelled.') })
+    } catch (error) {
+      setMessage({ type: 'error', text: error?.message || tr('Не вдалося скасувати.', 'Could not cancel.') })
+    } finally {
+      setReservingId('')
     }
   }
 
@@ -444,6 +501,64 @@ export default function Friends() {
         </Modal>
       )}
 
+      {listView && (
+        <Modal onClose={() => setListView(null)} wide>
+          <div className={s.modalHeader}>
+            <div>
+              <span>{tr('СПИСОК ПОБАЖАНЬ', 'WISHLIST')}</span>
+              <h2>{listView.emoji} {listView.title}</h2>
+              <p>{tr('Зарезервуй подарунок, щоб інші бачили що його вже обрали. Власник не побачить, хто саме зарезервував.', 'Reserve a gift so others see it is taken. The owner will not see who reserved it.')}</p>
+            </div>
+            <button type="button" onClick={() => setListView(null)}><AppIcon name="close" size={18} /></button>
+          </div>
+
+          {listView.items.length === 0 ? (
+            <div className={s.detailsEmpty}>
+              <span>🎁</span>
+              <strong>{tr('Список порожній', 'The list is empty')}</strong>
+              <p>{tr('Тут поки немає жодного бажання.', 'There are no wishes here yet.')}</p>
+            </div>
+          ) : (
+            <div className={s.reserveList}>
+              {listView.items.map(item => {
+                const reserved = item.is_reserved
+                const mine = item.reserved_by_me
+                return (
+                  <article className={`${s.reserveItem} ${reserved ? s.reserveItemTaken : ''}`} key={item.id}>
+                    <div className={s.reserveThumb}>
+                      {item.image_url ? <img src={item.image_url} alt="" /> : <span>🎁</span>}
+                    </div>
+                    <div className={s.reserveInfo}>
+                      <h4>{item.title}</h4>
+                      {item.price != null && <span className={s.reservePrice}>{Number(item.price).toLocaleString(language === 'en' ? 'en-US' : 'uk-UA')} ₴</span>}
+                      {item.notes && <p>{item.notes}</p>}
+                      {item.url && <a href={item.url} target="_blank" rel="noreferrer" className={s.reserveLink}><AppIcon name="link" size={13} />{tr('Перейти до товару', 'Open product')}</a>}
+                    </div>
+                    <div className={s.reserveAction}>
+                      {mine ? (
+                        <>
+                          <span className={s.reserveMine}><AppIcon name="check" size={13} />{tr('Ви зарезервували', 'Reserved by you')}</span>
+                          <button type="button" className={s.reserveCancel} onClick={() => handleCancelReserve(item)} disabled={reservingId === item.id}>
+                            {reservingId === item.id ? tr('…', '…') : tr('Скасувати', 'Cancel')}
+                          </button>
+                        </>
+                      ) : reserved ? (
+                        <span className={s.reserveTaken}>🔒 {tr('Вже зарезервовано', 'Already reserved')}</span>
+                      ) : (
+                        <button type="button" className={s.reserveButton} onClick={() => handleReserve(item)} disabled={reservingId === item.id}>
+                          <AppIcon name="gift" size={15} />
+                          {reservingId === item.id ? tr('Резервуємо…', 'Reserving…') : tr('Зарезервувати', 'Reserve')}
+                        </button>
+                      )}
+                    </div>
+                  </article>
+                )
+              })}
+            </div>
+          )}
+        </Modal>
+      )}
+
       {details && (
         <Modal onClose={() => setDetails(null)} wide>
           <div className={s.modalHeader}>
@@ -477,11 +592,11 @@ export default function Friends() {
           ) : (
             <div className={s.wishlistGrid}>
               {details.wishlists.map(list => (
-                <article className={s.wishlistCard} key={list.id}>
+                <article className={s.wishlistCard} key={list.id} onClick={() => openListView(list.id)} style={{ cursor: 'pointer' }}>
                   <div className={s.wishlistCover}><span>{list.emoji || '🎁'}</span><b>{list.visibility === 'friends' ? tr('Друзям', 'Friends') : tr('Публічний', 'Public')}</b></div>
                   <div className={s.wishlistBody}>
                     <h4>{list.title}</h4>
-                    <p>{list.items_count} {tr('бажань', 'wishes')}</p>
+                    <p>{list.items_count} {tr('бажань', 'wishes')} · {tr('натисни щоб відкрити', 'tap to open')}</p>
                     <div className={s.previewStrip}>
                       {(list.preview_items || []).length > 0 ? list.preview_items.map(item => (
                         <div key={item.id} title={item.title || ''}>{item.image_url ? <img src={item.image_url} alt="" /> : <span>🎁</span>}</div>
