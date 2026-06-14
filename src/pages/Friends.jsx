@@ -259,6 +259,7 @@ export default function Friends() {
     setMessage({ type: '', text: '' })
     try {
       const data = await viewFriendList(listId)
+      setDetails(null)          // закриваємо профіль друга, щоб список був поверх
       setListView(data)
     } catch (error) {
       setMessage({ type: 'error', text: error?.message || tr('Не вдалося відкрити список.', 'Could not open the list.') })
@@ -532,7 +533,8 @@ export default function Friends() {
                       <h4>{item.title}</h4>
                       {item.price != null && <span className={s.reservePrice}>{Number(item.price).toLocaleString(language === 'en' ? 'en-US' : 'uk-UA')} ₴</span>}
                       {item.notes && <p>{item.notes}</p>}
-                      {item.url && <a href={item.url} target="_blank" rel="noreferrer" className={s.reserveLink}><AppIcon name="link" size={13} />{tr('Перейти до товару', 'Open product')}</a>}
+                      {item.url && (!reserved || mine) && <a href={item.url} target="_blank" rel="noreferrer" className={s.reserveLink}><AppIcon name="link" size={13} />{tr('Перейти до товару', 'Open product')}</a>}
+                      {item.url && reserved && !mine && <span className={s.reserveLinkLocked}>🔒 {tr('Посилання приховане', 'Link hidden')}</span>}
                     </div>
                     <div className={s.reserveAction}>
                       {mine ? (
