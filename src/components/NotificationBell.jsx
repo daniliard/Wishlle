@@ -75,10 +75,8 @@ export default function NotificationBell({ onNav }) {
       setItems(cur => cur.map(x => x.id === n.id ? { ...x, is_read: true } : x))
       setUnread(c => Math.max(0, c - 1))
     }
-    // Навігація за типом
-    if (n.type === 'event_invite' || n.type === 'event_reminder') onNav?.('events')
-    else if (n.type === 'friend_request' || n.type === 'friend_accepted') onNav?.('friends')
-    else if (n.type === 'reservation') onNav?.('lists')
+    // Навігація за полем nav з бекенду (friends/events/lists)
+    if (n.nav) onNav?.(n.nav)
     setOpen(false)
   }
 
