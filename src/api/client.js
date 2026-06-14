@@ -230,15 +230,53 @@ export async function getFriendDetails(friendId) {
 
 // ── Events ────────────────────────────────────────────────────────────────
 export async function getMyEvents() {
-  const userId = getUserId()
-  return directus(`/items/events?filter[owner_id][_eq]=${userId}&sort[]=event_date`)
+  return request(`${BACKEND_URL}/api/events`)
+}
+
+export async function getEventDetails(eventId) {
+  return request(`${BACKEND_URL}/api/events/${eventId}`)
 }
 
 export async function createEvent(payload) {
-  return directus('/items/events', {
+  return request(`${BACKEND_URL}/api/events`, {
     method: 'POST',
-    body: JSON.stringify({ ...payload, owner_id: getUserId() }),
+    body: JSON.stringify(payload),
   })
+}
+
+export async function updateEvent(eventId, payload) {
+  return request(`${BACKEND_URL}/api/events/${eventId}`, {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
+  })
+}
+
+export async function deleteEvent(eventId) {
+  return request(`${BACKEND_URL}/api/events/${eventId}`, { method: 'DELETE' })
+}
+
+export async function inviteToEvent(eventId, userIds) {
+  return request(`${BACKEND_URL}/api/events/${eventId}/invite`, {
+    method: 'POST',
+    body: JSON.stringify({ user_ids: userIds }),
+  })
+}
+
+export async function respondToEvent(eventId, status) {
+  return request(`${BACKEND_URL}/api/events/${eventId}/respond`, {
+    method: 'POST',
+    body: JSON.stringify({ status }),
+  })
+}
+
+export async function removeEventParticipant(eventId, participantUserId) {
+  return request(`${BACKEND_URL}/api/events/${eventId}/participants/${participantUserId}`, {
+    method: 'DELETE',
+  })
+}
+
+export async function syncBirthdayEvents() {
+  return request(`${BACKEND_URL}/api/events/sync-birthdays`, { method: 'POST' })
 }
 
 // ── Catalog ───────────────────────────────────────────────────────────────
