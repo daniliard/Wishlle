@@ -3,8 +3,11 @@ import Footer from '../components/Footer'
 import AppIcon from '../components/AppIcons'
 import {
   addFriend,
+  acceptFriendRequest,
   getFriendDetails,
+  getFriendRequests,
   getFriends,
+  rejectFriendRequest,
   removeFriend,
   searchUsers,
   updateFriend,
@@ -73,7 +76,9 @@ function Modal({ children, onClose, wide = false }) {
 export default function Friends() {
   const { language, tr } = useLanguage()
   const [friends, setFriends] = useState([])
+  const [requests, setRequests] = useState([])
   const [loading, setLoading] = useState(true)
+  const [requestActionId, setRequestActionId] = useState('')
   const [pageError, setPageError] = useState('')
   const [message, setMessage] = useState({ type: '', text: '' })
 
@@ -101,8 +106,12 @@ export default function Friends() {
     setLoading(true)
     setPageError('')
     try {
-      const data = await getFriends()
-      setFriends(Array.isArray(data) ? data : [])
+      const [friendsData, requestsData] = await Promise.all([
+        getFriends(),
+        getFriendRequests(),
+      ])
+      setFriends(Array.isArray(friendsData) ? friendsData : [])
+      setRequests(Array.isArray(requestsData) ? requestsData : [])
     } catch (error) {
       setPageError(error?.message || tr('Не вдалося завантажити друзів.', 'Could not load friends.'))
     } finally {
@@ -112,6 +121,9 @@ export default function Friends() {
 
   useEffect(() => {
     loadFriends()
+    const refresh = () => loadFriends()
+    window.addEventListener('wishlle:friend-requests-changed', refresh)
+    return () => window.removeEventListener('wishlle:friend-requests-changed', refresh)
   }, [])
 
   useEffect(() => {
@@ -173,13 +185,61 @@ export default function Friends() {
     setMessage({ type: '', text: '' })
     try {
       const created = await addFriend(user.id)
-      setFriends(current => [created, ...current])
-      setResults(current => current.map(item => item.id === user.id ? { ...item, already_added: true } : item))
-      setMessage({ type: 'success', text: tr('Користувача додано до друзів.', 'User added to friends.') })
+      setResults(current => current.map(item => item.id === user.id ? {
+        ...item,
+        can_add: false,
+        request_status: 'outgoing',
+        request_id: created?.id || null,
+      } : item))
+      setMessage({ type: 'success', text: tr('Заявку в друзі надіслано.', 'Friend request sent.') })
     } catch (error) {
-      setMessage({ type: 'error', text: error?.message || tr('Не вдалося додати друга.', 'Could not add friend.') })
+      setMessage({ type: 'error', text: error?.message || tr('Не вдалося надіслати заявку.', 'Could not send friend request.') })
     } finally {
       setAddingId('')
+    }
+  }
+
+  async function handleAcceptRequest(request) {
+    setRequestActionId(request.id)
+    setMessage({ type: '', text: '' })
+    try {
+      const created = await acceptFriendRequest(request.id)
+      setRequests(current => current.filter(item => item.id !== request.id))
+      window.dispatchEvent(new Event('wishlle:notifications-changed'))
+      setFriends(current => [created, ...current.filter(item => item.friend_id !== created.friend_id)])
+      setResults(current => current.map(item => item.id === request.requester_id ? {
+        ...item,
+        already_added: true,
+        can_add: false,
+        request_status: 'friends',
+        request_id: null,
+      } : item))
+      setMessage({ type: 'success', text: tr('Заявку прийнято. Тепер ви друзі 🤝', 'Request accepted. You are now friends 🤝') })
+    } catch (error) {
+      setMessage({ type: 'error', text: error?.message || tr('Не вдалося прийняти заявку.', 'Could not accept the request.') })
+    } finally {
+      setRequestActionId('')
+    }
+  }
+
+  async function handleRejectRequest(request) {
+    setRequestActionId(request.id)
+    setMessage({ type: '', text: '' })
+    try {
+      await rejectFriendRequest(request.id)
+      setRequests(current => current.filter(item => item.id !== request.id))
+      window.dispatchEvent(new Event('wishlle:notifications-changed'))
+      setResults(current => current.map(item => item.id === request.requester_id ? {
+        ...item,
+        can_add: true,
+        request_status: 'none',
+        request_id: null,
+      } : item))
+      setMessage({ type: 'success', text: tr('Заявку відхилено.', 'Friend request declined.') })
+    } catch (error) {
+      setMessage({ type: 'error', text: error?.message || tr('Не вдалося відхилити заявку.', 'Could not decline the request.') })
+    } finally {
+      setRequestActionId('')
     }
   }
 
@@ -313,7 +373,7 @@ export default function Friends() {
           <div>
             <span>{tr('ТВОЄ КОЛО', 'YOUR CIRCLE')}</span>
             <h1>{tr('Друзі', 'Friends')}</h1>
-            <p>{tr('Додавай людей за нікнеймом, групуй їх тегами та переглядай доступні списки побажань.', 'Add people by username, group them with tags and browse their visible wishlists.')}</p>
+            <p>{tr('Надсилай заявки, підтверджуй дружбу, групуй людей тегами та переглядай доступні списки побажань.', 'Send requests, confirm friendships, group people with tags and browse visible wishlists.')}</p>
           </div>
           <div className={s.heroBadge}>
             <AppIcon name="friends" size={22} />
@@ -336,6 +396,49 @@ export default function Friends() {
             <span>{pageError}</span>
             <button type="button" onClick={loadFriends}>{tr('Повторити', 'Retry')}</button>
           </div>
+        )}
+
+        {requests.length > 0 && (
+          <section className={s.requestsSection}>
+            <div className={s.requestsHeading}>
+              <div>
+                <span>{tr('ВХІДНІ ЗАЯВКИ', 'INCOMING REQUESTS')}</span>
+                <strong>{tr('Хочуть додатися в друзі', 'People who want to add you')}</strong>
+              </div>
+              <b>{requests.length}</b>
+            </div>
+            <div className={s.requestsGrid}>
+              {requests.map(request => (
+                <article className={s.requestCard} key={request.id}>
+                  <UserAvatar user={request.user} />
+                  <div className={s.requestCopy}>
+                    <strong>{request.user?.display_name || request.user?.username || tr('Користувач', 'User')}</strong>
+                    {request.user?.username && <span>@{request.user.username}</span>}
+                    <small>{tr('Хоче додати тебе в друзі', 'Wants to add you as a friend')}</small>
+                  </div>
+                  <div className={s.requestActions}>
+                    <button
+                      type="button"
+                      className={s.rejectRequest}
+                      onClick={() => handleRejectRequest(request)}
+                      disabled={requestActionId === request.id}
+                    >
+                      {tr('Відхилити', 'Decline')}
+                    </button>
+                    <button
+                      type="button"
+                      className={s.acceptRequest}
+                      onClick={() => handleAcceptRequest(request)}
+                      disabled={requestActionId === request.id}
+                    >
+                      <AppIcon name="check" size={14} />
+                      {requestActionId === request.id ? tr('Обробляємо…', 'Processing…') : tr('Прийняти', 'Accept')}
+                    </button>
+                  </div>
+                </article>
+              ))}
+            </div>
+          </section>
         )}
 
         <section className={s.statsGrid}>
@@ -373,15 +476,19 @@ export default function Friends() {
                       <strong>{user.display_name || user.username || tr('Користувач', 'User')}</strong>
                       {user.username && <span>@{user.username}</span>}
                     </div>
-                    {user.already_added ? (
-                      <span className={s.addedBadge}><AppIcon name="check" size={14} />{tr('У друзях', 'Added')}</span>
+                    {user.request_status === 'friends' || user.already_added ? (
+                      <span className={s.addedBadge}><AppIcon name="check" size={14} />{tr('У друзях', 'Friends')}</span>
+                    ) : user.request_status === 'outgoing' ? (
+                      <span className={s.pendingBadge}>⏳ {tr('Заявку надіслано', 'Request sent')}</span>
+                    ) : user.request_status === 'incoming' ? (
+                      <span className={s.incomingBadge}>👋 {tr('Є вхідна заявка', 'Incoming request')}</span>
                     ) : user.can_add ? (
                       <button type="button" className={s.addButton} onClick={() => handleAdd(user)} disabled={addingId === user.id}>
                         <AppIcon name="plus" size={15} />
-                        {addingId === user.id ? tr('Додаємо…', 'Adding…') : tr('Додати', 'Add')}
+                        {addingId === user.id ? tr('Надсилаємо…', 'Sending…') : tr('Додати', 'Add')}
                       </button>
                     ) : (
-                      <span className={s.closedBadge}>{tr('Додавання вимкнено', 'Adding disabled')}</span>
+                      <span className={s.closedBadge}>{tr('Недоступно', 'Unavailable')}</span>
                     )}
                   </div>
                 ))}
@@ -394,7 +501,7 @@ export default function Friends() {
           <div className={s.sectionHeading}>
             <div>
               <strong>{tr('Мої друзі', 'My friends')}</strong>
-              <span>{tr('Зв’язок асиметричний: теги й локальне ім’я бачиш тільки ти.', 'The connection is asymmetric: tags and local name are visible only to you.')}</span>
+              <span>{tr('Після підтвердження ви з’являєтесь у списках друзів одне одного. Теги й локальне ім’я бачиш тільки ти.', 'After confirmation, you appear in each other’s friend lists. Tags and local name are visible only to you.')}</span>
             </div>
           </div>
 

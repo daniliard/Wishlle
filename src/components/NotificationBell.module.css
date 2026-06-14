@@ -24,3 +24,4 @@
 .item:hover .del{display:grid}
 .del:hover{background:rgba(240,91,91,.12);color:#ff8a8a}
 @media(max-width:560px){.panel{position:fixed;top:64px;right:8px;left:8px;width:auto}}
+.actionHint{margin-top:6px;color:var(--cyan);font-size:.62rem;font-weight:800}

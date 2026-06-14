@@ -45,7 +45,12 @@ export default function NotificationBell({ onNav }) {
   useEffect(() => {
     loadUnread()
     const timer = setInterval(loadUnread, 60000) // оновлюємо лічильник раз на хвилину
-    return () => clearInterval(timer)
+    const refresh = () => loadUnread()
+    window.addEventListener('wishlle:notifications-changed', refresh)
+    return () => {
+      clearInterval(timer)
+      window.removeEventListener('wishlle:notifications-changed', refresh)
+    }
   }, [loadUnread])
 
   useEffect(() => {
@@ -76,6 +81,9 @@ export default function NotificationBell({ onNav }) {
       setUnread(c => Math.max(0, c - 1))
     }
     // Навігація за полем nav з бекенду (friends/events/lists)
+    if (n.type === 'friend_request') {
+      window.dispatchEvent(new Event('wishlle:friend-requests-changed'))
+    }
     if (n.nav) onNav?.(n.nav)
     setOpen(false)
   }
@@ -128,10 +136,15 @@ export default function NotificationBell({ onNav }) {
                   <div className={s.body}>
                     <div className={s.title}>{n.title}</div>
                     {n.body && <div className={s.text}>{n.body}</div>}
+                    {n.type === 'friend_request' && (
+                      <div className={s.actionHint}>{tr('Натисни, щоб відповісти', 'Tap to respond')}</div>
+                    )}
                     <div className={s.time}>{timeAgo(n.created_at, language)}</div>
                   </div>
                   {!n.is_read && <span className={s.unreadDot} />}
-                  <span className={s.del} onClick={e => handleDelete(e, n.id)}><AppIcon name="close" size={13} /></span>
+                  {n.type !== 'friend_request' && (
+                    <span className={s.del} onClick={e => handleDelete(e, n.id)}><AppIcon name="close" size={13} /></span>
+                  )}
                 </button>
               ))
             )}

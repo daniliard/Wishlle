@@ -23,3 +23,26 @@
 .reserveTaken{display:inline-flex;align-items:center;gap:5px;padding:8px 12px;border-radius:10px;background:rgba(255,255,255,.05);color:var(--muted);font-size:.62rem;font-weight:800;white-space:nowrap}
 @media(max-width:560px){.reserveItem{flex-wrap:wrap}.reserveAction{flex-direction:row;width:100%;justify-content:flex-end;margin-top:4px}}
 .reserveLinkLocked{display:inline-flex;align-items:center;gap:5px;margin-top:2px;color:var(--muted);font-size:.6rem;opacity:.7}
+
+.requestsSection{margin:0 0 22px;padding:18px;border:1px solid rgba(0,200,232,.2);border-radius:20px;background:linear-gradient(135deg,rgba(0,200,232,.07),rgba(255,255,255,.025))}
+.requestsHeading{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:14px}
+.requestsHeading>div{display:flex;flex-direction:column;gap:5px}
+.requestsHeading span{color:var(--cyan);font-size:.56rem;font-weight:900;letter-spacing:.14em}
+.requestsHeading strong{font-size:.88rem}
+.requestsHeading b{min-width:32px;height:32px;display:grid;place-items:center;border-radius:10px;background:rgba(0,200,232,.12);color:var(--cyan);font-size:.72rem}
+.requestsGrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.requestCard{display:flex;align-items:center;gap:12px;padding:13px;border:1px solid var(--border);border-radius:15px;background:var(--surface)}
+.requestCopy{min-width:0;flex:1;display:flex;flex-direction:column}
+.requestCopy strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:.76rem}
+.requestCopy span{margin-top:3px;color:var(--cyan);font-size:.59rem}
+.requestCopy small{margin-top:4px;color:var(--muted);font-size:.56rem}
+.requestActions{display:flex;align-items:center;gap:7px}
+.requestActions button{min-height:34px;padding:0 11px;border-radius:10px;font:inherit;font-size:.58rem;font-weight:900;cursor:pointer;white-space:nowrap}
+.requestActions button:disabled{opacity:.55;cursor:wait}
+.rejectRequest{border:1px solid rgba(240,91,91,.22);background:rgba(240,91,91,.06);color:#ff9292}
+.acceptRequest{display:inline-flex;align-items:center;gap:6px;border:1px solid rgba(0,200,232,.28);background:rgba(0,200,232,.12);color:var(--cyan)}
+.pendingBadge,.incomingBadge{display:inline-flex;align-items:center;gap:5px;padding:7px 9px;border-radius:99px;font-size:.55rem;font-weight:900;white-space:nowrap}
+.pendingBadge{background:rgba(255,184,77,.1);color:#ffc875}
+.incomingBadge{background:rgba(0,200,232,.1);color:var(--cyan)}
+@media(max-width:900px){.requestsGrid{grid-template-columns:1fr}}
+@media(max-width:560px){.requestCard{align-items:flex-start;flex-wrap:wrap}.requestActions{width:100%;justify-content:flex-end}.requestActions button{flex:1}.requestsSection{padding:14px}}

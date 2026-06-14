@@ -211,6 +211,22 @@ export async function addFriend(friendId) {
   })
 }
 
+export async function getFriendRequests() {
+  return request(`${BACKEND_URL}/api/friends/requests`)
+}
+
+export async function acceptFriendRequest(requestId) {
+  return request(`${BACKEND_URL}/api/friends/requests/${requestId}/accept`, {
+    method: 'POST',
+  })
+}
+
+export async function rejectFriendRequest(requestId) {
+  return request(`${BACKEND_URL}/api/friends/requests/${requestId}`, {
+    method: 'DELETE',
+  })
+}
+
 export async function updateFriend(friendshipId, payload) {
   return request(`${BACKEND_URL}/api/friends/${friendshipId}`, {
     method: 'PATCH',
