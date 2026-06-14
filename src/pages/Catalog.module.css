@@ -64,3 +64,4 @@
 .pickerItem:hover{border-color:rgba(0,200,232,.4);color:var(--cyan)}
 .pickerItem:disabled{opacity:.6;cursor:wait}
 @media(max-width:768px){.pageHero{flex-direction:column;align-items:stretch;padding:28px 0 20px}.layout{grid-template-columns:1fr}.sidebar{position:static;flex-direction:row;flex-wrap:wrap;gap:7px}.sidebarTitle{display:none}.sidebar button{padding:7px 12px;border:1px solid var(--border);border-radius:99px}.detailActions{flex-direction:column}}
+.pickerItem>img,.pickerItem>span{width:30px;height:30px;display:grid;place-items:center;flex:0 0 30px;border-radius:8px;object-fit:cover;background:rgba(0,200,232,.08)}

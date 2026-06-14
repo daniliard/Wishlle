@@ -11,6 +11,13 @@ const CATEGORY_ICONS = {
   'Ігри': '🎮', 'Книги': '📚', 'Краса': '💄', 'Спорт': '⚽',
 }
 
+function ListPickerCover({ value }) {
+  const cover = String(value || '').trim()
+  return /^(https?:\/\/|\/backend\/|data:image\/|blob:)/i.test(cover)
+    ? <img src={cover} alt="" />
+    : <span>{cover || '🎁'}</span>
+}
+
 export default function Catalog({ onNav }) {
   const { tr, locale } = useLanguage()
 
@@ -211,7 +218,7 @@ export default function Catalog({ onNav }) {
             <div className={s.pickerTitle}>{tr('У який список додати?', 'Which list to add to?')}</div>
             {myLists.map(l => (
               <button key={l.id} className={s.pickerItem} onClick={() => handleAdd(pickFor, l.id)} disabled={adding === pickFor.id}>
-                <span>{l.emoji || '🎁'}</span> {l.title}
+                <ListPickerCover value={l.emoji} /> {l.title}
               </button>
             ))}
             <button className="btn-outline" style={{ width: '100%', marginTop: 8 }} onClick={() => setPickFor(null)}>{tr('Скасувати', 'Cancel')}</button>

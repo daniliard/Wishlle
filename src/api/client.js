@@ -141,6 +141,15 @@ export async function removeAvatar() {
   return updated
 }
 
+export async function uploadCover(file) {
+  const body = new FormData()
+  body.append('file', file)
+  return request(`${BACKEND_URL}/api/media/cover`, {
+    method: 'POST',
+    body,
+  })
+}
+
 // ── Parser ────────────────────────────────────────────────────────────────
 export async function parseUrl(url) {
   return request(`${BACKEND_URL}/api/parse-url`, {

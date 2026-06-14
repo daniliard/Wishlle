@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { createPortal } from 'react-dom'
 import Footer from '../components/Footer'
 import AppIcon from '../components/AppIcons'
 import {
@@ -17,6 +18,7 @@ import {
   viewFriendList,
   reserveItem,
   cancelReservation,
+  uploadCover,
 } from '../api/client'
 import { useLanguage } from '../i18n/LanguageContext'
 import s from './Events.module.css'
@@ -48,18 +50,37 @@ function Avatar({ user, size = 36 }) {
 }
 
 function Modal({ children, onClose, wide = false, extraWide = false }) {
-  return (
+  useEffect(() => {
+    const previous = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => { document.body.style.overflow = previous }
+  }, [])
+
+  return createPortal(
     <div className={s.backdrop} onMouseDown={onClose}>
       <div className={`${s.modal} ${wide ? s.modalWide : ''} ${extraWide ? s.modalExtraWide : ''}`} onMouseDown={event => event.stopPropagation()}>
         {children}
       </div>
-    </div>
+    </div>,
+    document.body,
   )
+}
+
+function isImageCover(value) {
+  const text = String(value || '').trim()
+  return /^(https?:\/\/|\/backend\/|data:image\/|blob:)/i.test(text)
 }
 
 function eventIcon(event) {
   const custom = String(event?.cover_image || '').trim()
-  return custom || TYPE_META[event?.event_type]?.icon || '📅'
+  return custom && !isImageCover(custom) ? custom : TYPE_META[event?.event_type]?.icon || '📅'
+}
+
+function EventCover({ value, fallback = '📅', className = '' }) {
+  const cover = String(value || '').trim()
+  return isImageCover(cover)
+    ? <img className={className} src={cover} alt="" />
+    : <span className={className}>{cover || fallback}</span>
 }
 
 function eventLocalParts(value) {
@@ -409,7 +430,7 @@ export default function Events() {
                   const pending = filter === 'invited' || event.my_status === 'invited'
                   return (
                     <article key={event.id} className={`${s.eventCard} ${pending ? s.eventCardPending : ''}`} onClick={() => openDetail(event.id)}>
-                      <div className={s.eventIcon} style={{ background: meta.glow }}>{eventIcon(event)}</div>
+                      <div className={`${s.eventIcon} ${isImageCover(event.cover_image) ? s.eventIconImage : ''}`} style={{ background: meta.glow }}><EventCover value={event.cover_image} fallback={eventIcon(event)} /></div>
                       <div className={s.eventBody}>
                         <div className={s.eventTitleRow}>
                           <h3>{event.title}</h3>
@@ -489,14 +510,47 @@ export default function Events() {
   )
 }
 
-function IconPicker({ value, onChange, tr }) {
+function CoverPicker({ value, preview, onEmoji, onFile, tr }) {
+  const image = preview || (isImageCover(value) ? value : '')
+
+  function chooseFile(event) {
+    const file = event.target.files?.[0]
+    if (!file) return
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
+      window.alert(tr('Підтримуються лише JPG, PNG та WEBP.', 'Only JPG, PNG and WEBP are supported.'))
+      event.target.value = ''
+      return
+    }
+    if (file.size > 8 * 1024 * 1024) {
+      window.alert(tr('Зображення завелике. Максимум — 8 МБ.', 'The image is too large. Maximum size is 8 MB.'))
+      event.target.value = ''
+      return
+    }
+    onFile(file)
+    event.target.value = ''
+  }
+
   return (
     <div className={s.field}>
-      <span>{tr('Ярлик події', 'Event label')}</span>
-      <div className={s.iconPicker}>
-        {EVENT_ICONS.map(icon => <button type="button" key={icon} className={value === icon ? s.iconActive : ''} onClick={() => onChange(icon)}>{icon}</button>)}
+      <span>{tr('Обкладинка події', 'Event cover')}</span>
+      {image && (
+        <div className={s.coverPreview}>
+          <img src={image} alt={tr('Обкладинка події', 'Event cover')} />
+          <button type="button" onClick={() => onEmoji('🎂')}>{tr('Прибрати фото', 'Remove photo')}</button>
+        </div>
+      )}
+      <div className={s.coverControls}>
+        <div className={s.iconPicker}>
+          {EVENT_ICONS.map(icon => (
+            <button type="button" key={icon} className={!image && value === icon ? s.iconActive : ''} onClick={() => onEmoji(icon)}>{icon}</button>
+          ))}
+        </div>
+        <label className={s.uploadCoverButton}>
+          <AppIcon name="upload" size={15} /> {tr('Завантажити фото', 'Upload image')}
+          <input type="file" accept="image/jpeg,image/png,image/webp" onChange={chooseFile} />
+        </label>
       </div>
-      <small className={s.hint}>{tr('Ярлик зберігається у вже наявному полі cover_image — нові поля в базі не потрібні.', 'The label uses the existing cover_image field — no database changes are required.')}</small>
+      <small className={s.hint}>{tr('Можна залишити емодзі або завантажити власну обкладинку. Зображення збережеться у Directus.', 'Keep an emoji or upload your own cover. The image will be stored in Directus.')}</small>
     </div>
   )
 }
@@ -542,30 +596,61 @@ function HonoreePicker({ friends, selected, onSelect, tr }) {
 function CreateEventModal({ friends, busy, tr, onClose, onCreate }) {
   const [form, setForm] = useState({ title: '', description: '', event_date: '', event_time: '18:00', location: '', event_type: 'private', honoree_id: '', cover_image: '🎂' })
   const [selectedParticipants, setSelectedParticipants] = useState([])
+  const [coverFile, setCoverFile] = useState(null)
+  const [coverPreview, setCoverPreview] = useState('')
+  const [uploading, setUploading] = useState(false)
+
+  useEffect(() => () => {
+    if (coverPreview?.startsWith('blob:')) URL.revokeObjectURL(coverPreview)
+  }, [coverPreview])
 
   function toggleParticipant(friendId) {
     setSelectedParticipants(current => current.includes(friendId) ? current.filter(item => item !== friendId) : [...current, friendId])
   }
 
-  function submit() {
-    if (!form.title.trim() || !form.event_date || !form.event_time || (form.event_type === 'private' && !form.honoree_id)) return
-    onCreate({
-      title: form.title.trim(),
-      description: form.description.trim() || null,
-      event_date: eventIso(form.event_date, form.event_time),
-      location: form.location.trim() || null,
-      event_type: form.event_type,
-      honoree_id: form.event_type === 'private' ? form.honoree_id : null,
-      cover_image: form.cover_image || null,
-      participant_ids: selectedParticipants,
-    })
+  function selectEmoji(icon) {
+    if (coverPreview?.startsWith('blob:')) URL.revokeObjectURL(coverPreview)
+    setCoverFile(null)
+    setCoverPreview('')
+    setForm(current => ({ ...current, cover_image: icon }))
   }
 
+  function selectFile(file) {
+    if (coverPreview?.startsWith('blob:')) URL.revokeObjectURL(coverPreview)
+    setCoverFile(file)
+    setCoverPreview(URL.createObjectURL(file))
+  }
+
+  async function submit() {
+    if (!form.title.trim() || !form.event_date || !form.event_time || (form.event_type === 'private' && !form.honoree_id)) return
+    setUploading(true)
+    try {
+      let coverImage = form.cover_image || '🎂'
+      if (coverFile) {
+        const uploaded = await uploadCover(coverFile)
+        coverImage = uploaded.url
+      }
+      await onCreate({
+        title: form.title.trim(),
+        description: form.description.trim() || null,
+        event_date: eventIso(form.event_date, form.event_time),
+        location: form.location.trim() || null,
+        event_type: form.event_type,
+        honoree_id: form.event_type === 'private' ? form.honoree_id : null,
+        cover_image: coverImage,
+        participant_ids: selectedParticipants,
+      })
+    } finally {
+      setUploading(false)
+    }
+  }
+
+  const disabled = busy || uploading
   return (
-    <Modal onClose={() => !busy && onClose()} wide>
-      <div className={s.modalHead}><div><span>{tr('НОВА ПОДІЯ', 'NEW EVENT')}</span><h2>{tr('Створити подію', 'Create event')}</h2><p>{tr('Запрошені отримають сповіщення, а подія з’явиться у них лише після підтвердження.', 'Invitees receive a notification and the event appears only after acceptance.')}</p></div><button onClick={onClose}><AppIcon name="close" size={18} /></button></div>
+    <Modal onClose={() => !disabled && onClose()} wide>
+      <div className={s.modalHead}><div><span>{tr('НОВА ПОДІЯ', 'NEW EVENT')}</span><h2>{tr('Створити подію', 'Create event')}</h2><p>{tr('Запрошені отримають сповіщення, а подія з’явиться у них лише після підтвердження.', 'Invitees receive a notification and the event appears only after acceptance.')}</p></div><button onClick={onClose} disabled={disabled}><AppIcon name="close" size={18} /></button></div>
       <EventTypePicker form={form} setForm={setForm} tr={tr} />
-      <IconPicker value={form.cover_image} onChange={cover_image => setForm(current => ({ ...current, cover_image }))} tr={tr} />
+      <CoverPicker value={form.cover_image} preview={coverPreview} onEmoji={selectEmoji} onFile={selectFile} tr={tr} />
       <label className={s.field}><span>{tr('Назва події', 'Event title')}</span><input value={form.title} onChange={event => setForm(current => ({ ...current, title: event.target.value }))} maxLength={120} placeholder={tr('Наприклад, День народження Дані', 'For example, Dan’s birthday')} /></label>
       {form.event_type === 'private' && <HonoreePicker friends={friends} selected={form.honoree_id} onSelect={honoree_id => setForm(current => ({ ...current, honoree_id }))} tr={tr} />}
       <div className={s.row2}>
@@ -586,7 +671,7 @@ function CreateEventModal({ friends, busy, tr, onClose, onCreate }) {
           </div>
         )}
       </div>
-      <div className={s.modalActions}><button className="btn-outline" onClick={onClose} disabled={busy}>{tr('Скасувати', 'Cancel')}</button><button className="btn-primary" onClick={submit} disabled={busy || !form.title.trim() || !form.event_date || !form.event_time || (form.event_type === 'private' && !form.honoree_id)}>{busy ? tr('Створюємо…', 'Creating…') : tr('Створити й запросити', 'Create and invite')}</button></div>
+      <div className={s.modalActions}><button className="btn-outline" onClick={onClose} disabled={disabled}>{tr('Скасувати', 'Cancel')}</button><button className="btn-primary" onClick={submit} disabled={disabled || !form.title.trim() || !form.event_date || !form.event_time || (form.event_type === 'private' && !form.honoree_id)}>{uploading ? tr('Завантажуємо фото…', 'Uploading image…') : busy ? tr('Створюємо…', 'Creating…') : tr('Створити й запросити', 'Create and invite')}</button></div>
     </Modal>
   )
 }
@@ -603,25 +688,56 @@ function EditEventModal({ event, friends, busy, tr, onClose, onSave }) {
     honoree_id: event.honoree_id || '',
     cover_image: event.cover_image || eventIcon(event),
   })
+  const [coverFile, setCoverFile] = useState(null)
+  const [coverPreview, setCoverPreview] = useState(isImageCover(event.cover_image) ? event.cover_image : '')
+  const [uploading, setUploading] = useState(false)
 
-  function submit() {
-    if (!form.title.trim() || !form.event_date || !form.event_time || (form.event_type === 'private' && !form.honoree_id)) return
-    onSave({
-      title: form.title.trim(),
-      description: form.description.trim() || null,
-      event_date: eventIso(form.event_date, form.event_time),
-      location: form.location.trim() || null,
-      event_type: form.event_type,
-      honoree_id: form.event_type === 'private' ? form.honoree_id : null,
-      cover_image: form.cover_image || null,
-    })
+  useEffect(() => () => {
+    if (coverPreview?.startsWith('blob:')) URL.revokeObjectURL(coverPreview)
+  }, [coverPreview])
+
+  function selectEmoji(icon) {
+    if (coverPreview?.startsWith('blob:')) URL.revokeObjectURL(coverPreview)
+    setCoverFile(null)
+    setCoverPreview('')
+    setForm(current => ({ ...current, cover_image: icon }))
   }
 
+  function selectFile(file) {
+    if (coverPreview?.startsWith('blob:')) URL.revokeObjectURL(coverPreview)
+    setCoverFile(file)
+    setCoverPreview(URL.createObjectURL(file))
+  }
+
+  async function submit() {
+    if (!form.title.trim() || !form.event_date || !form.event_time || (form.event_type === 'private' && !form.honoree_id)) return
+    setUploading(true)
+    try {
+      let coverImage = form.cover_image || eventIcon(event)
+      if (coverFile) {
+        const uploaded = await uploadCover(coverFile)
+        coverImage = uploaded.url
+      }
+      await onSave({
+        title: form.title.trim(),
+        description: form.description.trim() || null,
+        event_date: eventIso(form.event_date, form.event_time),
+        location: form.location.trim() || null,
+        event_type: form.event_type,
+        honoree_id: form.event_type === 'private' ? form.honoree_id : null,
+        cover_image: coverImage,
+      })
+    } finally {
+      setUploading(false)
+    }
+  }
+
+  const disabled = busy || uploading
   return (
-    <Modal onClose={() => !busy && onClose()} wide>
-      <div className={s.modalHead}><div><span>{tr('РЕДАГУВАННЯ', 'EDIT EVENT')}</span><h2>{tr('Налаштування події', 'Event settings')}</h2><p>{tr('Можна змінити тип події, іменинника та ярлик без додавання полів у базу.', 'You can change event type, honoree and label without adding database fields.')}</p></div><button onClick={onClose}><AppIcon name="close" size={18} /></button></div>
+    <Modal onClose={() => !disabled && onClose()} wide>
+      <div className={s.modalHead}><div><span>{tr('РЕДАГУВАННЯ', 'EDIT EVENT')}</span><h2>{tr('Налаштування події', 'Event settings')}</h2><p>{tr('Зміни тип, дату, учасників або власну обкладинку події.', 'Change the type, date, participants or custom event cover.')}</p></div><button onClick={onClose} disabled={disabled}><AppIcon name="close" size={18} /></button></div>
       <EventTypePicker form={form} setForm={setForm} tr={tr} />
-      <IconPicker value={form.cover_image} onChange={cover_image => setForm(current => ({ ...current, cover_image }))} tr={tr} />
+      <CoverPicker value={form.cover_image} preview={coverPreview} onEmoji={selectEmoji} onFile={selectFile} tr={tr} />
       <label className={s.field}><span>{tr('Назва події', 'Event title')}</span><input value={form.title} onChange={input => setForm(current => ({ ...current, title: input.target.value }))} maxLength={120} /></label>
       {form.event_type === 'private' && <HonoreePicker friends={friends} selected={form.honoree_id} onSelect={honoree_id => setForm(current => ({ ...current, honoree_id }))} tr={tr} />}
       <div className={s.row2}>
@@ -630,7 +746,7 @@ function EditEventModal({ event, friends, busy, tr, onClose, onSave }) {
       </div>
       <label className={s.field}><span>{tr('Місце', 'Location')}</span><input value={form.location} onChange={input => setForm(current => ({ ...current, location: input.target.value }))} maxLength={255} /></label>
       <label className={s.field}><span>{tr('Опис', 'Description')}</span><textarea value={form.description} onChange={input => setForm(current => ({ ...current, description: input.target.value }))} rows={3} /></label>
-      <div className={s.modalActions}><button className="btn-outline" onClick={onClose} disabled={busy}>{tr('Скасувати', 'Cancel')}</button><button className="btn-primary" onClick={submit} disabled={busy || !form.title.trim() || !form.event_date || !form.event_time || (form.event_type === 'private' && !form.honoree_id)}><AppIcon name="check" size={15} />{busy ? tr('Зберігаємо…', 'Saving…') : tr('Зберегти зміни', 'Save changes')}</button></div>
+      <div className={s.modalActions}><button className="btn-outline" onClick={onClose} disabled={disabled}>{tr('Скасувати', 'Cancel')}</button><button className="btn-primary" onClick={submit} disabled={disabled || !form.title.trim() || !form.event_date || !form.event_time || (form.event_type === 'private' && !form.honoree_id)}><AppIcon name="check" size={15} />{uploading ? tr('Завантажуємо фото…', 'Uploading image…') : busy ? tr('Зберігаємо…', 'Saving…') : tr('Зберегти зміни', 'Save changes')}</button></div>
     </Modal>
   )
 }
@@ -656,7 +772,12 @@ function EventDetailModal({ detail, friends, myId, busy, tr, locale, onClose, on
   return (
     <Modal onClose={onClose} wide>
       <div className={s.modalHead}>
-        <div><span>{detail.event_type === 'private' ? tr('ПРИВАТНА ПОДІЯ', 'PRIVATE EVENT') : tr('ГРУПОВА ПОДІЯ', 'GROUP EVENT')}</span><h2>{eventIcon(detail)} {detail.title}</h2><p>{detail.event_date ? formatEventDateTime(detail.event_date, locale, { weekday: 'long' }) : ''}{days !== null && days >= 0 && ` · ${days === 0 ? tr('сьогодні', 'today') : days === 1 ? tr('завтра', 'tomorrow') : tr(`через ${days} дн.`, `in ${days} days`)}`}</p></div>
+        <div className={s.detailHeading}>
+          <div className={`${s.detailCover} ${isImageCover(detail.cover_image) ? s.detailCoverImage : ''}`}>
+            <EventCover value={detail.cover_image} fallback={eventIcon(detail)} />
+          </div>
+          <div><span>{detail.event_type === 'private' ? tr('ПРИВАТНА ПОДІЯ', 'PRIVATE EVENT') : tr('ГРУПОВА ПОДІЯ', 'GROUP EVENT')}</span><h2>{detail.title}</h2><p>{detail.event_date ? formatEventDateTime(detail.event_date, locale, { weekday: 'long' }) : ''}{days !== null && days >= 0 && ` · ${days === 0 ? tr('сьогодні', 'today') : days === 1 ? tr('завтра', 'tomorrow') : tr(`через ${days} дн.`, `in ${days} days`)}`}</p></div>
+        </div>
         <div className={s.modalHeadButtons}>{detail.is_owner && !detail.is_auto && <button onClick={onEdit} title={tr('Редагувати', 'Edit')}><AppIcon name="edit" size={16} /></button>}<button onClick={onClose}><AppIcon name="close" size={18} /></button></div>
       </div>
 
@@ -690,7 +811,7 @@ function EventDetailModal({ detail, friends, myId, busy, tr, locale, onClose, on
       {detail.wishlists.length === 0 ? <div className={s.noWishlists}><span>🎁</span><p>{tr('Доступних списків поки немає.', 'There are no visible wishlists yet.')}</p></div> : (
         <div className={s.wishlistGrid}>{detail.wishlists.map(wishlist => (
           <button type="button" key={wishlist.id} className={s.wishlistCard} onClick={() => onOpenWishlist(wishlist.id)} disabled={listLoading}>
-            <div className={s.wlCover}><span>{wishlist.emoji}</span></div>
+            <div className={s.wlCover}><EventCover value={wishlist.emoji} fallback="🎁" /></div>
             <div className={s.wlBody}><h4>{wishlist.title}</h4><p>{wishlist.owner_name} · {wishlist.items_count} {tr('бажань', 'wishes')}</p><small>{tr('Натисни, щоб відкрити', 'Tap to open')}</small></div>
             <AppIcon name="arrowRight" size={15} />
           </button>
@@ -706,7 +827,7 @@ function WishlistViewModal({ data, myId, busyId, language, tr, onClose, onReserv
   const isOwner = data.owner_id === myId
   return (
     <Modal onClose={onClose} extraWide>
-      <div className={s.modalHead}><div><span>{tr('СПИСОК ПОБАЖАНЬ', 'WISHLIST')}</span><h2>{data.emoji} {data.title}</h2><p>{isOwner ? tr('Це ваш список. У події він відкривається лише для перегляду.', 'This is your wishlist and is read-only here.') : tr('Можна відкрити товар і зарезервувати подарунок.', 'Open a product or reserve a gift.')}</p></div><button onClick={onClose}><AppIcon name="close" size={18} /></button></div>
+      <div className={s.modalHead}><div className={s.detailHeading}><div className={`${s.detailCover} ${isImageCover(data.emoji) ? s.detailCoverImage : ''}`}><EventCover value={data.emoji} fallback="🎁" /></div><div><span>{tr('СПИСОК ПОБАЖАНЬ', 'WISHLIST')}</span><h2>{data.title}</h2><p>{isOwner ? tr('Це ваш список. У події він відкривається лише для перегляду.', 'This is your wishlist and is read-only here.') : tr('Можна відкрити товар і зарезервувати подарунок.', 'Open a product or reserve a gift.')}</p></div></div><button onClick={onClose}><AppIcon name="close" size={18} /></button></div>
       {data.items.length === 0 ? <div className={s.noWishlists}><span>🎁</span><p>{tr('Список поки порожній.', 'The wishlist is empty.')}</p></div> : (
         <div className={s.reserveList}>{data.items.map(item => {
           const reserved = item.is_reserved

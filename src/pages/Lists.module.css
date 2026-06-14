@@ -27,7 +27,7 @@
 .listCard:hover, .listCard:focus-visible { transform: translateY(-4px); border-color: rgba(0,200,232,.25); background: var(--surface2); box-shadow: 0 18px 40px rgba(0,0,0,.22); }
 .listCover { position: relative; height: 116px; display: grid; place-items: center; overflow: hidden; background: linear-gradient(135deg, rgba(0,200,232,.12), rgba(59,130,246,.08) 50%, rgba(167,139,250,.08)); }
 .coverGlow { position: absolute; width: 150px; height: 150px; border-radius: 50%; background: rgba(0,200,232,.12); filter: blur(35px); }
-.listEmoji { position: relative; z-index: 1; font-size: 2.75rem; filter: drop-shadow(0 8px 16px rgba(0,0,0,.25)); }
+.listEmoji { position: relative; z-index: 1; font-size: 2.75rem; filter: drop-shadow(0 8px 16px rgba(0,0,0,.25)); }.listCover img.listEmoji { width: 100%; height: 100%; object-fit: cover; filter: none; }.listCover img.listEmoji + .visibilityBadge { z-index: 3; }
 .visibilityBadge { position: absolute; top: 11px; right: 11px; z-index: 2; padding: 5px 9px; border: 1px solid rgba(255,255,255,.09); border-radius: 99px; backdrop-filter: blur(10px); font-size: .57rem; font-weight: 900; }
 .publicBadge { background: rgba(34,211,122,.1); color: #56e59a; }
 .friendsBadge { background: rgba(0,200,232,.11); color: #66e8f4; }
@@ -73,7 +73,7 @@
 .backButton:hover { color: var(--cyan); }
 .detailActions { display: flex; gap: 8px; }
 .detailHero { display: flex; align-items: center; gap: 18px; margin-bottom: 24px; padding: 23px; border: 1px solid var(--border); border-radius: 21px; background: linear-gradient(135deg, rgba(0,200,232,.08), rgba(255,255,255,.025)); }
-.detailEmoji { width: 78px; height: 78px; display: grid; place-items: center; flex: 0 0 78px; border: 1px solid rgba(0,200,232,.14); border-radius: 23px; background: rgba(0,200,232,.07); font-size: 2.45rem; }
+.detailEmoji { width: 78px; height: 78px; display: grid; place-items: center; flex: 0 0 78px; overflow: hidden; border: 1px solid rgba(0,200,232,.14); border-radius: 23px; background: rgba(0,200,232,.07); font-size: 2.45rem; }.detailEmoji img { width: 100%; height: 100%; object-fit: cover; }.detailImageCover { background: var(--surface2); }
 .detailCopy span { display: inline-block; margin-bottom: 7px; padding: 4px 8px; border-radius: 99px; font-size: .56rem; font-weight: 900; }
 .detailPublic { background: rgba(34,211,122,.1); color: #56e59a; }
 .detailFriends { background: rgba(0,200,232,.11); color: #66e8f4; }
@@ -81,8 +81,8 @@
 .detailCopy h1 { font-size: clamp(1.35rem, 3vw, 2rem); }
 .detailCopy p { margin-top: 7px; color: var(--muted); font-size: .68rem; }
 .itemsGrid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 15px; }
-.itemCard { overflow: hidden; border: 1px solid var(--border); border-radius: 19px; background: var(--surface); transition: transform .2s ease, border-color .2s ease; }
-.itemCard:hover { transform: translateY(-3px); border-color: rgba(0,200,232,.2); }
+.itemCard { overflow: hidden; border: 1px solid var(--border); border-radius: 19px; background: var(--surface); cursor: pointer; outline: none; transition: transform .2s ease, border-color .2s ease, box-shadow .2s ease; }
+.itemCard:hover, .itemCard:focus-visible { transform: translateY(-3px); border-color: rgba(0,200,232,.28); box-shadow: 0 16px 34px rgba(0,0,0,.2); }
 .itemImage { position: relative; height: 180px; display: grid; place-items: center; overflow: hidden; background: rgba(0,200,232,.055); color: rgba(0,200,232,.5); }
 .itemImage img { width: 100%; height: 100%; object-fit: cover; }
 .itemStatus { position: absolute; top: 10px; left: 10px; padding: 5px 9px; border-radius: 99px; backdrop-filter: blur(9px); font-size: .55rem; font-weight: 900; }
@@ -98,8 +98,9 @@
 .itemFooter div { display: flex; gap: 5px; }
 .noLink { color: var(--muted); font-size: .6rem; }
 
-.modalBackdrop { position: fixed; inset: 0; z-index: 1000; display: grid; place-items: center; padding: 18px; background: rgba(2,9,16,.78); backdrop-filter: blur(10px); }
-.modal { width: min(590px, 100%); max-height: calc(100vh - 36px); overflow-y: auto; padding: 24px; border: 1px solid var(--border2); border-radius: 22px; background: #101d2b; box-shadow: 0 30px 80px rgba(0,0,0,.46); }
+.modalBackdrop { position: fixed; inset: 0; z-index: 1000; display: flex; align-items: flex-start; justify-content: center; overflow-y: auto; overscroll-behavior: contain; padding: 18px; background: rgba(2,9,16,.78); backdrop-filter: blur(10px); }
+.modal { width: min(590px, 100%); margin: auto 0; padding: 24px; border: 1px solid var(--border2); border-radius: 22px; background: #101d2b; box-shadow: 0 30px 80px rgba(0,0,0,.46); }
+.modalWide { width: min(820px, 100%); }
 .modalHeader { display: flex; justify-content: space-between; gap: 18px; margin-bottom: 22px; }
 .modalHeader h2 { font-size: 1.05rem; }
 .modalHeader p { margin-top: 5px; color: var(--muted); font-size: .66rem; line-height: 1.45; }
@@ -173,3 +174,8 @@
   .modalActions button { width: 100%; }
   .detailActions { grid-template-columns: 1fr; }
 }
+
+.listCoverControls{display:flex;align-items:flex-start;gap:12px;flex-wrap:wrap}.listCoverControls .emojiPicker{flex:1}.coverUploadButton{min-height:43px;display:inline-flex;align-items:center;justify-content:center;gap:7px;padding:0 13px;border:1px solid rgba(0,200,232,.28);border-radius:12px;background:rgba(0,200,232,.08);color:var(--cyan);font-size:.65rem;font-weight:900;cursor:pointer;white-space:nowrap}.coverUploadButton:hover{background:rgba(0,200,232,.13)}.coverUploadButton input{display:none}.coverHint{color:var(--muted);font-size:.58rem;line-height:1.45}.listCoverPreview{position:relative;height:185px;overflow:hidden;border:1px solid var(--border2);border-radius:15px;background:var(--surface)}.listCoverPreview img{width:100%;height:100%;object-fit:cover}.listCoverPreview button{position:absolute;right:10px;bottom:10px;padding:7px 10px;border:1px solid rgba(255,255,255,.18);border-radius:9px;background:rgba(3,13,23,.8);color:#fff;font:inherit;font-size:.6rem;font-weight:900;cursor:pointer;backdrop-filter:blur(8px)}
+.itemDetail{display:grid;grid-template-columns:minmax(260px,42%) 1fr;gap:22px}.itemDetailImage{position:relative;min-height:330px;display:grid;place-items:center;overflow:hidden;border:1px solid var(--border);border-radius:18px;background:rgba(0,200,232,.055);color:rgba(0,200,232,.55)}.itemDetailImage img{width:100%;height:100%;object-fit:cover}.itemDetailBody{min-width:0;display:flex;flex-direction:column}.itemDetailTitle{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;padding-bottom:16px;border-bottom:1px solid var(--border)}.itemDetailTitle h3{font-size:1.15rem;line-height:1.35}.itemDetailTitle strong{color:var(--cyan);font-size:1rem;white-space:nowrap}.itemDetailBody>p{margin:18px 0;color:rgba(255,255,255,.78);font-size:.76rem;line-height:1.6}.itemDetailBody .mutedDetail{color:var(--muted)}.productLink{display:inline-flex;align-items:center;gap:7px;align-self:flex-start;color:var(--cyan);font-size:.7rem;font-weight:900;text-decoration:none}.itemDetailActions{display:flex;gap:9px;margin-top:auto;padding-top:24px}.itemDetailActions button{display:inline-flex;align-items:center;justify-content:center;gap:7px}.deleteDetailButton{padding:10px 15px;border:1px solid rgba(240,91,91,.28);border-radius:11px;background:rgba(240,91,91,.08);color:#ff9292;font:inherit;font-size:.68rem;font-weight:900;cursor:pointer}
+
+@media (max-width: 768px) { .modalBackdrop{padding:12px 12px 92px}.modal{padding:19px}.listCoverControls{flex-direction:column}.coverUploadButton{width:100%}.listCoverPreview{height:160px}.itemDetail{grid-template-columns:1fr}.itemDetailImage{min-height:240px}.itemDetailActions{display:grid;grid-template-columns:1fr}.itemDetailActions button{width:100%} }

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { createPortal } from 'react-dom'
 import AppIcon from '../components/AppIcons'
 import Footer from '../components/Footer'
 import {
@@ -11,6 +12,7 @@ import {
   parseUrl,
   updateItem,
   updateList,
+  uploadCover,
 } from '../api/client'
 import { useLanguage } from '../i18n/LanguageContext'
 import s from './Lists.module.css'
@@ -41,11 +43,17 @@ function formatPrice(value, locale) {
   return `${amount.toLocaleString(locale)} ₴`
 }
 
-function ModalShell({ title, subtitle, onClose, children }) {
-  const { tr, locale } = useLanguage()
-  return (
+function ModalShell({ title, subtitle, onClose, children, wide = false }) {
+  const { tr } = useLanguage()
+  useEffect(() => {
+    const previous = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => { document.body.style.overflow = previous }
+  }, [])
+
+  return createPortal(
     <div className={s.modalBackdrop} onMouseDown={event => event.target === event.currentTarget && onClose()}>
-      <div className={s.modal} role="dialog" aria-modal="true" aria-label={title}>
+      <div className={`${s.modal} ${wide ? s.modalWide : ''}`} role="dialog" aria-modal="true" aria-label={title}>
         <div className={s.modalHeader}>
           <div>
             <h2>{title}</h2>
@@ -57,19 +65,65 @@ function ModalShell({ title, subtitle, onClose, children }) {
         </div>
         {children}
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }
 
+function isImageCover(value) {
+  return /^(https?:\/\/|\/backend\/|data:image\/|blob:)/i.test(String(value || '').trim())
+}
+
+function ListCover({ value, className = '' }) {
+  const cover = String(value || '').trim()
+  return isImageCover(cover)
+    ? <img className={className} src={cover} alt="" />
+    : <span className={className}>{cover || '🎁'}</span>
+}
+
 function ListModal({ list, onClose, onSave }) {
-  const { tr, locale } = useLanguage()
+  const { tr } = useLanguage()
+  const initialCover = list?.emoji || '🎁'
   const [form, setForm] = useState({
     title: list?.title || '',
-    emoji: list?.emoji || '🎁',
+    emoji: initialCover,
     visibility: listVisibility(list),
   })
+  const [coverFile, setCoverFile] = useState(null)
+  const [coverPreview, setCoverPreview] = useState(isImageCover(initialCover) ? initialCover : '')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+
+  useEffect(() => () => {
+    if (coverPreview?.startsWith('blob:')) URL.revokeObjectURL(coverPreview)
+  }, [coverPreview])
+
+  function chooseEmoji(emoji) {
+    if (coverPreview?.startsWith('blob:')) URL.revokeObjectURL(coverPreview)
+    setCoverFile(null)
+    setCoverPreview('')
+    setForm(current => ({ ...current, emoji }))
+  }
+
+  function chooseCover(event) {
+    const file = event.target.files?.[0]
+    if (!file) return
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
+      setError(tr('Підтримуються лише JPG, PNG та WEBP.', 'Only JPG, PNG and WEBP are supported.'))
+      event.target.value = ''
+      return
+    }
+    if (file.size > 8 * 1024 * 1024) {
+      setError(tr('Зображення завелике. Максимум — 8 МБ.', 'The image is too large. Maximum size is 8 MB.'))
+      event.target.value = ''
+      return
+    }
+    if (coverPreview?.startsWith('blob:')) URL.revokeObjectURL(coverPreview)
+    setCoverFile(file)
+    setCoverPreview(URL.createObjectURL(file))
+    setError('')
+    event.target.value = ''
+  }
 
   async function submit(event) {
     event.preventDefault()
@@ -80,7 +134,12 @@ function ListModal({ list, onClose, onSave }) {
     setSaving(true)
     setError('')
     try {
-      await onSave({ ...form, title: form.title.trim() })
+      let cover = form.emoji || '🎁'
+      if (coverFile) {
+        const uploaded = await uploadCover(coverFile)
+        cover = uploaded.url
+      }
+      await onSave({ ...form, emoji: cover, title: form.title.trim() })
     } catch (requestError) {
       setError(requestError?.message || tr('Не вдалося зберегти список.', 'Could not save the list.'))
     } finally {
@@ -88,67 +147,57 @@ function ListModal({ list, onClose, onSave }) {
     }
   }
 
+  const image = coverPreview || (isImageCover(form.emoji) ? form.emoji : '')
+
   return (
     <ModalShell
       title={list ? tr('Редагувати список', 'Edit list') : tr('Створити новий список', 'Create a new list')}
-      subtitle={tr('Дай списку зрозумілу назву та обери, хто зможе його бачити.', 'Give the list a clear name and choose who can see it.')}
+      subtitle={tr('Дай списку зрозумілу назву, обкладинку та обери, хто зможе його бачити.', 'Give the list a clear name, cover and choose who can see it.')}
       onClose={onClose}
     >
       <form onSubmit={submit} className={s.modalForm}>
         <label className={s.field}>
           <span>{tr('Назва списку', 'List name')}</span>
-          <input
-            autoFocus
-            value={form.title}
-            maxLength={120}
-            placeholder={tr('Наприклад, Подарунки на день народження', 'For example, Birthday gifts')}
-            onChange={event => setForm(current => ({ ...current, title: event.target.value }))}
-          />
+          <input autoFocus value={form.title} maxLength={120} placeholder={tr('Наприклад, Подарунки на день народження', 'For example, Birthday gifts')} onChange={event => setForm(current => ({ ...current, title: event.target.value }))} />
         </label>
 
         <div className={s.field}>
           <span>{tr('Обкладинка', 'Cover')}</span>
-          <div className={s.emojiPicker}>
-            {EMOJIS.map(emoji => (
-              <button
-                type="button"
-                key={emoji}
-                className={form.emoji === emoji ? s.emojiActive : ''}
-                onClick={() => setForm(current => ({ ...current, emoji }))}
-                aria-label={`${tr('Обрати', 'Choose')} ${emoji}`}
-              >
-                {emoji}
-              </button>
-            ))}
+          {image && (
+            <div className={s.listCoverPreview}>
+              <img src={image} alt={tr('Обкладинка списку', 'List cover')} />
+              <button type="button" onClick={() => chooseEmoji('🎁')}>{tr('Прибрати фото', 'Remove photo')}</button>
+            </div>
+          )}
+          <div className={s.listCoverControls}>
+            <div className={s.emojiPicker}>
+              {EMOJIS.map(emoji => (
+                <button type="button" key={emoji} className={!image && form.emoji === emoji ? s.emojiActive : ''} onClick={() => chooseEmoji(emoji)} aria-label={`${tr('Обрати', 'Choose')} ${emoji}`}>
+                  {emoji}
+                </button>
+              ))}
+            </div>
+            <label className={s.coverUploadButton}>
+              <AppIcon name="upload" size={15} /> {tr('Завантажити фото', 'Upload image')}
+              <input type="file" accept="image/jpeg,image/png,image/webp" onChange={chooseCover} />
+            </label>
           </div>
+          <small className={s.coverHint}>{tr('Можна залишити емодзі або завантажити JPG, PNG чи WEBP до 8 МБ.', 'Keep an emoji or upload a JPG, PNG or WEBP up to 8 MB.')}</small>
         </div>
 
         <div className={s.field}>
           <span>{tr('Видимість', 'Visibility')}</span>
           <div className={s.visibilityOptions}>
-            <button type="button" className={form.visibility === 'public' ? s.visibilityActive : ''} onClick={() => setForm(current => ({ ...current, visibility: 'public' }))}>
-              <span>🌍</span>
-              <div><strong>{tr('Публічний', 'Public')}</strong><small>{tr('Доступний усім користувачам', 'Visible to all users')}</small></div>
-            </button>
-            <button type="button" className={form.visibility === 'friends' ? s.visibilityActive : ''} onClick={() => setForm(current => ({ ...current, visibility: 'friends' }))}>
-              <span>👥</span>
-              <div><strong>{tr('Для друзів', 'Friends only')}</strong><small>{tr('Відкривається лише підтвердженим друзям', 'Visible only to confirmed friends')}</small></div>
-            </button>
-            <button type="button" className={form.visibility === 'private' ? s.visibilityActive : ''} onClick={() => setForm(current => ({ ...current, visibility: 'private' }))}>
-              <span>🔒</span>
-              <div><strong>{tr('Приватний', 'Private')}</strong><small>{tr('Список бачиш лише ти', 'Only you can see this list')}</small></div>
-            </button>
+            <button type="button" className={form.visibility === 'public' ? s.visibilityActive : ''} onClick={() => setForm(current => ({ ...current, visibility: 'public' }))}><span>🌍</span><div><strong>{tr('Публічний', 'Public')}</strong><small>{tr('Доступний усім користувачам', 'Visible to all users')}</small></div></button>
+            <button type="button" className={form.visibility === 'friends' ? s.visibilityActive : ''} onClick={() => setForm(current => ({ ...current, visibility: 'friends' }))}><span>👥</span><div><strong>{tr('Для друзів', 'Friends only')}</strong><small>{tr('Відкривається лише підтвердженим друзям', 'Visible only to confirmed friends')}</small></div></button>
+            <button type="button" className={form.visibility === 'private' ? s.visibilityActive : ''} onClick={() => setForm(current => ({ ...current, visibility: 'private' }))}><span>🔒</span><div><strong>{tr('Приватний', 'Private')}</strong><small>{tr('Список бачиш лише ти', 'Only you can see this list')}</small></div></button>
           </div>
         </div>
 
         {error && <div className={s.errorBox}>{error}</div>}
-
         <div className={s.modalActions}>
-          <button type="button" className="btn-outline" onClick={onClose}>{tr('Скасувати', 'Cancel')}</button>
-          <button type="submit" className="btn-primary" disabled={saving}>
-            <AppIcon name={saving ? 'sparkles' : 'check'} size={17} />
-            {saving ? tr('Зберігаємо…', 'Saving…') : list ? tr('Зберегти зміни', 'Save changes') : tr('Створити список', 'Create list')}
-          </button>
+          <button type="button" className="btn-outline" onClick={onClose} disabled={saving}>{tr('Скасувати', 'Cancel')}</button>
+          <button type="submit" className="btn-primary" disabled={saving}><AppIcon name={saving ? 'sparkles' : 'check'} size={17} />{saving ? tr('Зберігаємо…', 'Saving…') : list ? tr('Зберегти зміни', 'Save changes') : tr('Створити список', 'Create list')}</button>
         </div>
       </form>
     </ModalShell>
@@ -294,6 +343,34 @@ function ItemModal({ item, onClose, onSave }) {
   )
 }
 
+function ItemDetailModal({ item, onClose, onEdit, onDelete }) {
+  const { tr, locale } = useLanguage()
+  return (
+    <ModalShell title={item.title} subtitle={tr('Детальна інформація про бажання', 'Wish details')} onClose={onClose} wide>
+      <div className={s.itemDetail}>
+        <div className={s.itemDetailImage}>
+          {item.image_url ? <img src={item.image_url} alt={item.title} /> : <AppIcon name="gift" size={54} />}
+          <span className={`${s.itemStatus} ${item.status === 'reserved' ? s.statusReserved : s.statusAvailable}`}>
+            {item.status === 'reserved' ? tr('Заброньовано', 'Reserved') : item.status === 'purchased' ? tr('Придбано', 'Purchased') : tr('Доступно', 'Available')}
+          </span>
+        </div>
+        <div className={s.itemDetailBody}>
+          <div className={s.itemDetailTitle}>
+            <h3>{item.title}</h3>
+            {item.price !== null && item.price !== undefined && <strong>{formatPrice(item.price, locale)}</strong>}
+          </div>
+          {item.notes ? <p>{item.notes}</p> : <p className={s.mutedDetail}>{tr('Коментар не додано.', 'No note added.')}</p>}
+          {item.url && <a className={s.productLink} href={item.url} target="_blank" rel="noreferrer"><AppIcon name="link" size={16} /> {tr('Відкрити сторінку товару', 'Open product page')}</a>}
+          <div className={s.itemDetailActions}>
+            <button type="button" className="btn-outline" onClick={onEdit}><AppIcon name="edit" size={16} /> {tr('Редагувати', 'Edit')}</button>
+            <button type="button" className={s.deleteDetailButton} onClick={onDelete}><AppIcon name="trash" size={16} /> {tr('Видалити', 'Delete')}</button>
+          </div>
+        </div>
+      </div>
+    </ModalShell>
+  )
+}
+
 function Stats({ lists }) {
   const { tr, locale } = useLanguage()
   const totalItems = lists.reduce((sum, list) => sum + Number(list.items_count || 0), 0)
@@ -326,7 +403,7 @@ function ListCard({ list, onOpen, onEdit, onDelete }) {
     <article className={s.listCard} onClick={onOpen} tabIndex="0" onKeyDown={event => event.key === 'Enter' && onOpen()}>
       <div className={s.listCover}>
         <div className={s.coverGlow} />
-        <span className={s.listEmoji}>{list.emoji || '🎁'}</span>
+        <ListCover value={list.emoji} className={s.listEmoji} />
         {(() => {
           const visibility = listVisibility(list)
           const meta = visibilityMeta(visibility, tr)
@@ -371,7 +448,7 @@ function ListCard({ list, onOpen, onEdit, onDelete }) {
   )
 }
 
-function WishlistDetail({ list, items, loading, onBack, onAdd, onEditList, onEditItem, onDeleteItem }) {
+function WishlistDetail({ list, items, loading, onBack, onAdd, onEditList, onOpenItem, onEditItem, onDeleteItem }) {
   const { tr, locale } = useLanguage()
   return (
     <div className={s.detailPage}>
@@ -386,7 +463,7 @@ function WishlistDetail({ list, items, loading, onBack, onAdd, onEditList, onEdi
       </div>
 
       <section className={s.detailHero}>
-        <div className={s.detailEmoji}>{list.emoji || '🎁'}</div>
+        <div className={`${s.detailEmoji} ${isImageCover(list.emoji) ? s.detailImageCover : ''}`}><ListCover value={list.emoji} /></div>
         <div className={s.detailCopy}>
           {(() => {
             const visibility = listVisibility(list)
@@ -410,7 +487,7 @@ function WishlistDetail({ list, items, loading, onBack, onAdd, onEditList, onEdi
       ) : (
         <div className={s.itemsGrid}>
           {items.map(item => (
-            <article className={s.itemCard} key={item.id}>
+            <article className={s.itemCard} key={item.id} onClick={() => onOpenItem(item)} tabIndex="0" onKeyDown={event => event.key === 'Enter' && onOpenItem(item)}>
               <div className={s.itemImage}>
                 {item.image_url ? <img src={item.image_url} alt={item.title} /> : <AppIcon name="gift" size={36} />}
                 <span className={`${s.itemStatus} ${item.status === 'reserved' ? s.statusReserved : s.statusAvailable}`}>
@@ -428,8 +505,8 @@ function WishlistDetail({ list, items, loading, onBack, onAdd, onEditList, onEdi
                     <a href={item.url} target="_blank" rel="noreferrer"><AppIcon name="link" size={15} /> {tr('Перейти до товару', 'Open product')}</a>
                   ) : <span className={s.noLink}>{tr('Без посилання', 'No link')}</span>}
                   <div>
-                    <button type="button" onClick={() => onEditItem(item)} aria-label={tr('Редагувати', 'Edit')}><AppIcon name="edit" size={16} /></button>
-                    <button type="button" className={s.dangerButton} onClick={() => onDeleteItem(item)} aria-label={tr('Видалити', 'Delete')}><AppIcon name="trash" size={16} /></button>
+                    <button type="button" onClick={event => { event.stopPropagation(); onEditItem(item) }} aria-label={tr('Редагувати', 'Edit')}><AppIcon name="edit" size={16} /></button>
+                    <button type="button" className={s.dangerButton} onClick={event => { event.stopPropagation(); onDeleteItem(item) }} aria-label={tr('Видалити', 'Delete')}><AppIcon name="trash" size={16} /></button>
                   </div>
                 </div>
               </div>
@@ -459,6 +536,7 @@ export default function Lists() {
   const [filter, setFilter] = useState('all')
   const [listModal, setListModal] = useState(null)
   const [itemModal, setItemModal] = useState(null)
+  const [viewItem, setViewItem] = useState(null)
 
   async function loadLists() {
     setLoading(true)
@@ -532,6 +610,7 @@ export default function Lists() {
     if (itemModal?.id) {
       const updated = await updateItem(itemModal.id, payload)
       setItems(current => current.map(entry => String(entry.id) === String(updated.id) ? updated : entry))
+      if (viewItem && String(viewItem.id) === String(updated.id)) setViewItem(updated)
     } else {
       const created = await createItem(selectedList.id, payload)
       setItems(current => [created, ...current])
@@ -545,6 +624,7 @@ export default function Lists() {
     try {
       await deleteItem(item.id)
       setItems(current => current.filter(entry => String(entry.id) !== String(item.id)))
+      if (viewItem && String(viewItem.id) === String(item.id)) setViewItem(null)
       await loadLists()
     } catch (requestError) {
       setError(requestError?.message || tr('Не вдалося видалити бажання.', 'Could not delete the wish.'))
@@ -569,6 +649,7 @@ export default function Lists() {
             onBack={() => { setSelectedList(null); setItems([]); setError('') }}
             onAdd={() => setItemModal({})}
             onEditList={() => setListModal(selectedList)}
+            onOpenItem={item => setViewItem(item)}
             onEditItem={item => setItemModal(item)}
             onDeleteItem={removeItem}
           />
@@ -576,6 +657,7 @@ export default function Lists() {
         </div>
         {listModal && <ListModal list={listModal?.id ? listModal : null} onClose={() => setListModal(null)} onSave={saveList} />}
         {itemModal && <ItemModal item={itemModal?.id ? itemModal : null} onClose={() => setItemModal(null)} onSave={saveItem} />}
+        {viewItem && <ItemDetailModal item={viewItem} onClose={() => setViewItem(null)} onEdit={() => { setItemModal(viewItem); setViewItem(null) }} onDelete={() => removeItem(viewItem)} />}
       </div>
     )
   }

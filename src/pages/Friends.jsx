@@ -21,6 +21,15 @@ import s from './Friends.module.css'
 const QUICK_TAGS_UK = ['Родичі', 'Друзі']
 const QUICK_TAGS_EN = ['Family', 'Friends']
 
+function isCoverImage(value) {
+  return /^(https?:\/\/|\/backend\/|data:image\/|blob:)/i.test(String(value || '').trim())
+}
+
+function CoverValue({ value, className = '' }) {
+  const cover = String(value || '').trim()
+  return isCoverImage(cover) ? <img className={className} src={cover} alt="" /> : <span className={className}>{cover || '🎁'}</span>
+}
+
 function initials(user, nickname = '') {
   const source = nickname || user?.display_name || user?.username || 'W'
   return source
@@ -612,10 +621,13 @@ export default function Friends() {
       {listView && (
         <Modal onClose={() => setListView(null)} wide>
           <div className={s.modalHeader}>
-            <div>
-              <span>{tr('СПИСОК ПОБАЖАНЬ', 'WISHLIST')}</span>
-              <h2>{listView.emoji} {listView.title}</h2>
-              <p>{tr('Зарезервуй подарунок, щоб інші бачили що його вже обрали. Власник не побачить, хто саме зарезервував.', 'Reserve a gift so others see it is taken. The owner will not see who reserved it.')}</p>
+            <div className={s.modalTitleCover}>
+              <div className={s.modalCoverThumb}><CoverValue value={listView.emoji} /></div>
+              <div>
+                <span>{tr('СПИСОК ПОБАЖАНЬ', 'WISHLIST')}</span>
+                <h2>{listView.title}</h2>
+                <p>{tr('Зарезервуй подарунок, щоб інші бачили що його вже обрали. Власник не побачить, хто саме зарезервував.', 'Reserve a gift so others see it is taken. The owner will not see who reserved it.')}</p>
+              </div>
             </div>
             <button type="button" onClick={() => setListView(null)}><AppIcon name="close" size={18} /></button>
           </div>
@@ -702,7 +714,7 @@ export default function Friends() {
             <div className={s.wishlistGrid}>
               {details.wishlists.map(list => (
                 <article className={s.wishlistCard} key={list.id} onClick={() => openListView(list.id)} style={{ cursor: 'pointer' }}>
-                  <div className={s.wishlistCover}><span>{list.emoji || '🎁'}</span><b>{list.visibility === 'friends' ? tr('Друзям', 'Friends') : tr('Публічний', 'Public')}</b></div>
+                  <div className={s.wishlistCover}><CoverValue value={list.emoji} /><b>{list.visibility === 'friends' ? tr('Друзям', 'Friends') : tr('Публічний', 'Public')}</b></div>
                   <div className={s.wishlistBody}>
                     <h4>{list.title}</h4>
                     <p>{list.items_count} {tr('бажань', 'wishes')} · {tr('натисни щоб відкрити', 'tap to open')}</p>
