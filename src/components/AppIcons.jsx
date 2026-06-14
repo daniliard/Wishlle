@@ -26,6 +26,7 @@ export default function AppIcon({ name, size = 20, strokeWidth = 1.9, className 
     plus: <><path d="M12 5v14M5 12h14"/></>,
     gift: <><rect x="3" y="8" width="18" height="13" rx="2"/><path d="M12 8v13M3 12h18"/><path d="M12 8H7.5A2.5 2.5 0 1 1 10 5.5L12 8Zm0 0h4.5A2.5 2.5 0 1 0 14 5.5L12 8Z"/></>,
     arrowRight: <><path d="M5 12h14M13 6l6 6-6 6"/></>,
+    arrowLeft: <><path d="M19 12H5M11 18l-6-6 6-6"/></>,
     edit: <><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L8 18l-4 1 1-4Z"/></>,
     check: <path d="m5 12 4 4L19 6"/>,
     userCheck: <><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="m16 11 2 2 4-4"/></>,

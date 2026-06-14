@@ -272,14 +272,11 @@ export default function Account({ user: userFromApp, onUserUpdated, onLogout }) 
       <div className={s.grid}>
         <aside className={s.summaryCard}>
           <div className={s.avatarWrap}>
-            <button type="button" className={s.avatarButton} onClick={chooseAvatar} aria-label="Змінити фото профілю">
-              <div className={s.avatar}>
-                {shownAvatar && !avatarBroken
-                  ? <img src={shownAvatar} alt="Аватар" referrerPolicy="no-referrer" onError={() => setAvatarBroken(true)} />
-                  : <span>{initials({ ...user, ...form })}</span>}
-              </div>
-              <span className={s.cameraBadge}><AppIcon name="camera" size={16} /></span>
-            </button>
+            <div className={s.avatar}>
+              {shownAvatar && !avatarBroken
+                ? <img src={shownAvatar} alt="Аватар" referrerPolicy="no-referrer" onError={() => setAvatarBroken(true)} />
+                : <span>{initials({ ...user, ...form })}</span>}
+            </div>
             <span className={s.onlineDot} title="Обліковий запис активний" />
           </div>
 

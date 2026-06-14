@@ -1,13 +1,59 @@
-import { useState, useEffect, useRef } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import AppIcon from '../components/AppIcons'
 import Footer from '../components/Footer'
-import s from './Lists.module.css'
 import {
-  getMyLists, createList, updateList, deleteList,
-  getListItems, createItem, updateItem, deleteItem,
-  reserveItem, parseUrl, getUserId,
+  createItem,
+  createList,
+  deleteItem,
+  deleteList,
+  getListItems,
+  getMyLists,
+  parseUrl,
+  updateItem,
+  updateList,
 } from '../api/client'
+import s from './Lists.module.css'
 
-// ── Модалка створення/редагування списку ──────────────────────────────────
+const EMOJIS = ['🎁', '🎂', '🎮', '💻', '✈️', '🏠', '👟', '📚', '🎧', '✨']
+const FILTERS = [
+  { value: 'all', label: 'Усі списки' },
+  { value: 'public', label: 'Публічні' },
+  { value: 'private', label: 'Приватні' },
+]
+
+function formatDate(value) {
+  if (!value) return 'Щойно створено'
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return 'Нещодавно оновлено'
+  return new Intl.DateTimeFormat('uk-UA', { day: 'numeric', month: 'long', year: 'numeric' }).format(date)
+}
+
+function formatPrice(value) {
+  if (value === null || value === undefined || value === '') return ''
+  const amount = Number(value)
+  if (Number.isNaN(amount)) return ''
+  return `${amount.toLocaleString('uk-UA')} ₴`
+}
+
+function ModalShell({ title, subtitle, onClose, children }) {
+  return (
+    <div className={s.modalBackdrop} onMouseDown={event => event.target === event.currentTarget && onClose()}>
+      <div className={s.modal} role="dialog" aria-modal="true" aria-label={title}>
+        <div className={s.modalHeader}>
+          <div>
+            <h2>{title}</h2>
+            {subtitle && <p>{subtitle}</p>}
+          </div>
+          <button type="button" className={s.iconButton} onClick={onClose} aria-label="Закрити">
+            <AppIcon name="close" size={19} />
+          </button>
+        </div>
+        {children}
+      </div>
+    </div>
+  )
+}
+
 function ListModal({ list, onClose, onSave }) {
   const [form, setForm] = useState({
     title: list?.title || '',
@@ -15,343 +61,573 @@ function ListModal({ list, onClose, onSave }) {
     is_public: list?.is_public ?? true,
   })
   const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
 
-  async function handleSubmit() {
-    if (!form.title.trim()) return
+  async function submit(event) {
+    event.preventDefault()
+    if (!form.title.trim()) {
+      setError('Вкажи назву списку.')
+      return
+    }
     setSaving(true)
-    try { await onSave(form) } finally { setSaving(false) }
+    setError('')
+    try {
+      await onSave({ ...form, title: form.title.trim() })
+    } catch (requestError) {
+      setError(requestError?.message || 'Не вдалося зберегти список.')
+    } finally {
+      setSaving(false)
+    }
   }
 
   return (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(8px)', zIndex: 500, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}
-      onClick={e => e.target === e.currentTarget && onClose()}>
-      <div style={{ background: '#0f1e2e', border: '1px solid var(--border2)', borderRadius: 22, padding: 28, width: '100%', maxWidth: 400 }}>
-        <div style={{ fontWeight: 900, fontSize: '1.1rem', marginBottom: 22 }}>{list ? 'Редагувати список' : 'Новий список'}</div>
+    <ModalShell
+      title={list ? 'Редагувати список' : 'Створити новий список'}
+      subtitle="Дай списку зрозумілу назву та обери, хто зможе його бачити."
+      onClose={onClose}
+    >
+      <form onSubmit={submit} className={s.modalForm}>
+        <label className={s.field}>
+          <span>Назва списку</span>
+          <input
+            autoFocus
+            value={form.title}
+            maxLength={120}
+            placeholder="Наприклад, Подарунки на день народження"
+            onChange={event => setForm(current => ({ ...current, title: event.target.value }))}
+          />
+        </label>
 
-        <div style={{ marginBottom: 14 }}>
-          <div style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--muted)', marginBottom: 6 }}>Назва</div>
-          <input value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))}
-            placeholder="Наприклад: Хочу на ДН 🎂"
-            style={{ width: '100%', background: 'var(--surface2)', border: '1px solid var(--border2)', borderRadius: 12, padding: '11px 14px', color: 'var(--text)', fontFamily: 'Nunito, sans-serif', fontSize: '0.9rem', outline: 'none' }} />
-        </div>
-
-        <div style={{ marginBottom: 20 }}>
-          <div style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--muted)', marginBottom: 6 }}>Видимість</div>
-          <div style={{ display: 'flex', gap: 8 }}>
-            {[{ v: true, l: '🔓 Публічний' }, { v: false, l: '🔒 Приватний' }].map(({ v, l }) => (
-              <div key={String(v)} onClick={() => setForm(f => ({ ...f, is_public: v }))}
-                style={{ flex: 1, padding: '9px 14px', borderRadius: 11, border: `1px solid ${form.is_public === v ? 'rgba(0,200,232,0.4)' : 'var(--border)'}`, background: form.is_public === v ? 'var(--cyan-glow)' : 'var(--surface)', color: form.is_public === v ? 'var(--cyan)' : 'var(--muted)', fontSize: '0.82rem', fontWeight: 700, cursor: 'pointer', textAlign: 'center' }}>
-                {l}
-              </div>
+        <div className={s.field}>
+          <span>Обкладинка</span>
+          <div className={s.emojiPicker}>
+            {EMOJIS.map(emoji => (
+              <button
+                type="button"
+                key={emoji}
+                className={form.emoji === emoji ? s.emojiActive : ''}
+                onClick={() => setForm(current => ({ ...current, emoji }))}
+                aria-label={`Обрати ${emoji}`}
+              >
+                {emoji}
+              </button>
             ))}
           </div>
         </div>
 
-        <div style={{ display: 'flex', gap: 10 }}>
-          <button className="btn-outline" style={{ flex: 1 }} onClick={onClose}>Скасувати</button>
-          <button className="btn-primary" style={{ flex: 1 }} onClick={handleSubmit} disabled={saving}>
-            {saving ? '...' : 'Зберегти'}
+        <div className={s.field}>
+          <span>Видимість</span>
+          <div className={s.visibilityOptions}>
+            <button
+              type="button"
+              className={form.is_public ? s.visibilityActive : ''}
+              onClick={() => setForm(current => ({ ...current, is_public: true }))}
+            >
+              <span>🌍</span>
+              <div><strong>Публічний</strong><small>Друзі зможуть переглядати список</small></div>
+            </button>
+            <button
+              type="button"
+              className={!form.is_public ? s.visibilityActive : ''}
+              onClick={() => setForm(current => ({ ...current, is_public: false }))}
+            >
+              <span>🔒</span>
+              <div><strong>Приватний</strong><small>Список бачиш лише ти</small></div>
+            </button>
+          </div>
+        </div>
+
+        {error && <div className={s.errorBox}>{error}</div>}
+
+        <div className={s.modalActions}>
+          <button type="button" className="btn-outline" onClick={onClose}>Скасувати</button>
+          <button type="submit" className="btn-primary" disabled={saving}>
+            <AppIcon name={saving ? 'sparkles' : 'check'} size={17} />
+            {saving ? 'Зберігаємо…' : list ? 'Зберегти зміни' : 'Створити список'}
           </button>
         </div>
-      </div>
-    </div>
+      </form>
+    </ModalShell>
   )
 }
 
-// ── Модалка додавання бажання ──────────────────────────────────────────────
-function ItemModal({ listId, item, onClose, onSave }) {
+function ItemModal({ item, onClose, onSave }) {
   const [form, setForm] = useState({
     title: item?.title || '',
     url: item?.url || '',
-    price: item?.price || '',
+    price: item?.price ?? '',
     image_url: item?.image_url || '',
     notes: item?.notes || '',
   })
   const [parsing, setParsing] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+  const [imageBroken, setImageBroken] = useState(false)
 
-  async function handleParse() {
-    if (!form.url.trim()) return
+  async function fillFromUrl() {
+    if (!form.url.trim()) {
+      setError('Спочатку встав посилання на товар.')
+      return
+    }
     setParsing(true)
+    setError('')
     try {
-      const data = await parseUrl(form.url)
-      setForm(f => ({
-        ...f,
-        title: data.title || f.title,
-        price: data.price || f.price,
-        image_url: data.image || f.image_url,
+      const data = await parseUrl(form.url.trim())
+      setForm(current => ({
+        ...current,
+        title: data?.title || current.title,
+        price: data?.price ?? current.price,
+        image_url: data?.image || current.image_url,
       }))
-    } catch { /* ігнор */ }
-    finally { setParsing(false) }
+      setImageBroken(false)
+    } catch (requestError) {
+      setError(requestError?.message || 'Не вдалося отримати дані за посиланням. Заповни поля вручну.')
+    } finally {
+      setParsing(false)
+    }
   }
 
-  async function handleSubmit() {
-    if (!form.title.trim()) return
+  async function submit(event) {
+    event.preventDefault()
+    if (!form.title.trim()) {
+      setError('Вкажи назву бажання.')
+      return
+    }
     setSaving(true)
+    setError('')
     try {
-      await onSave({ ...form, wishlist_id: listId, status: 'available', price: form.price ? parseFloat(form.price) : null })
-    } finally { setSaving(false) }
+      await onSave({
+        title: form.title.trim(),
+        url: form.url.trim() || null,
+        price: form.price === '' ? null : Number(form.price),
+        image_url: form.image_url.trim() || null,
+        notes: form.notes.trim() || null,
+      })
+    } catch (requestError) {
+      setError(requestError?.message || 'Не вдалося зберегти бажання.')
+    } finally {
+      setSaving(false)
+    }
   }
 
   return (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(8px)', zIndex: 500, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}
-      onClick={e => e.target === e.currentTarget && onClose()}>
-      <div style={{ background: '#0f1e2e', border: '1px solid var(--border2)', borderRadius: 22, padding: 28, width: '100%', maxWidth: 420 }}>
-        <div style={{ fontWeight: 900, fontSize: '1.1rem', marginBottom: 22 }}>{item ? 'Редагувати' : 'Додати бажання'}</div>
-
-        <div style={{ marginBottom: 12 }}>
-          <div style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--muted)', marginBottom: 6 }}>Посилання (необов'язково)</div>
-          <div style={{ display: 'flex', gap: 8 }}>
-            <input value={form.url} onChange={e => setForm(f => ({ ...f, url: e.target.value }))}
-              placeholder="https://rozetka.com.ua/..."
-              style={{ flex: 1, background: 'var(--surface2)', border: '1px solid var(--border2)', borderRadius: 12, padding: '10px 14px', color: 'var(--text)', fontFamily: 'Nunito, sans-serif', fontSize: '0.85rem', outline: 'none' }} />
-            <button className="btn-sm cyan" onClick={handleParse} disabled={parsing} style={{ whiteSpace: 'nowrap', padding: '0 14px' }}>
-              {parsing ? '...' : '⚡ Авто'}
+    <ModalShell
+      title={item ? 'Редагувати бажання' : 'Додати бажання'}
+      subtitle="Встав посилання для автозаповнення або внеси інформацію вручну."
+      onClose={onClose}
+    >
+      <form onSubmit={submit} className={s.modalForm}>
+        <label className={s.field}>
+          <span>Посилання на товар</span>
+          <div className={s.urlRow}>
+            <div className={s.inputWithIcon}>
+              <AppIcon name="link" size={17} />
+              <input
+                value={form.url}
+                placeholder="https://shop.example.com/product"
+                onChange={event => setForm(current => ({ ...current, url: event.target.value }))}
+              />
+            </div>
+            <button type="button" className={s.autoButton} onClick={fillFromUrl} disabled={parsing}>
+              <AppIcon name="sparkles" size={16} /> {parsing ? 'Чекай…' : 'Заповнити'}
             </button>
           </div>
-        </div>
+        </label>
 
-        {[
-          ['Назва *', 'title', 'text', 'AirPods Pro 2'],
-          ['Ціна (₴)', 'price', 'number', '7500'],
-        ].map(([label, key, type, placeholder]) => (
-          <div key={key} style={{ marginBottom: 12 }}>
-            <div style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--muted)', marginBottom: 6 }}>{label}</div>
-            <input type={type} value={form[key]} onChange={e => setForm(f => ({ ...f, [key]: e.target.value }))}
-              placeholder={placeholder}
-              style={{ width: '100%', background: 'var(--surface2)', border: '1px solid var(--border2)', borderRadius: 12, padding: '10px 14px', color: 'var(--text)', fontFamily: 'Nunito, sans-serif', fontSize: '0.85rem', outline: 'none' }} />
+        <div className={s.itemFormGrid}>
+          <div className={s.previewBox}>
+            {form.image_url && !imageBroken
+              ? <img src={form.image_url} alt="Прев’ю товару" onError={() => setImageBroken(true)} />
+              : <div><AppIcon name="gift" size={34} /><span>Фото підтягнеться з посилання</span></div>}
           </div>
-        ))}
-
-        <div style={{ marginBottom: 20 }}>
-          <div style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--muted)', marginBottom: 6 }}>Нотатка</div>
-          <textarea value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))}
-            placeholder="Додаткова інформація..."
-            rows={2}
-            style={{ width: '100%', background: 'var(--surface2)', border: '1px solid var(--border2)', borderRadius: 12, padding: '10px 14px', color: 'var(--text)', fontFamily: 'Nunito, sans-serif', fontSize: '0.85rem', outline: 'none', resize: 'none' }} />
+          <div className={s.itemFields}>
+            <label className={s.field}>
+              <span>Назва</span>
+              <input
+                value={form.title}
+                maxLength={180}
+                placeholder="Наприклад, Навушники Sony"
+                onChange={event => setForm(current => ({ ...current, title: event.target.value }))}
+              />
+            </label>
+            <label className={s.field}>
+              <span>Орієнтовна ціна, ₴</span>
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                value={form.price}
+                placeholder="0"
+                onChange={event => setForm(current => ({ ...current, price: event.target.value }))}
+              />
+            </label>
+          </div>
         </div>
 
-        <div style={{ display: 'flex', gap: 10 }}>
-          <button className="btn-outline" style={{ flex: 1 }} onClick={onClose}>Скасувати</button>
-          <button className="btn-primary" style={{ flex: 1 }} onClick={handleSubmit} disabled={saving || !form.title.trim()}>
-            {saving ? '...' : 'Зберегти'}
+        <label className={s.field}>
+          <span>Коментар</span>
+          <textarea
+            rows="3"
+            maxLength={1000}
+            value={form.notes}
+            placeholder="Колір, розмір, модель або інші деталі"
+            onChange={event => setForm(current => ({ ...current, notes: event.target.value }))}
+          />
+        </label>
+
+        {error && <div className={s.errorBox}>{error}</div>}
+
+        <div className={s.modalActions}>
+          <button type="button" className="btn-outline" onClick={onClose}>Скасувати</button>
+          <button type="submit" className="btn-primary" disabled={saving}>
+            <AppIcon name={saving ? 'sparkles' : 'check'} size={17} />
+            {saving ? 'Зберігаємо…' : item ? 'Зберегти зміни' : 'Додати бажання'}
           </button>
         </div>
-      </div>
+      </form>
+    </ModalShell>
+  )
+}
+
+function Stats({ lists }) {
+  const totalItems = lists.reduce((sum, list) => sum + Number(list.items_count || 0), 0)
+  const publicCount = lists.filter(list => list.is_public).length
+  const privateCount = lists.length - publicCount
+  const cards = [
+    { icon: 'lists', value: lists.length, label: 'списків' },
+    { icon: 'gift', value: totalItems, label: 'бажань' },
+    { icon: 'friends', value: publicCount, label: 'публічних' },
+    { icon: 'shield', value: privateCount, label: 'приватних' },
+  ]
+
+  return (
+    <div className={s.statsGrid}>
+      {cards.map(card => (
+        <div className={s.statCard} key={card.label}>
+          <span><AppIcon name={card.icon} size={20} /></span>
+          <div><strong>{card.value}</strong><small>{card.label}</small></div>
+        </div>
+      ))}
     </div>
   )
 }
 
-// ── Головна сторінка списків ───────────────────────────────────────────────
-const GRAD_COLORS = ['lc1', 'lc2', 'lc3', 'lc4', 'lc5']
+function ListCard({ list, onOpen, onEdit, onDelete }) {
+  const preview = Array.isArray(list.preview_items) ? list.preview_items.slice(0, 4) : []
+  return (
+    <article className={s.listCard} onClick={onOpen} tabIndex="0" onKeyDown={event => event.key === 'Enter' && onOpen()}>
+      <div className={s.listCover}>
+        <div className={s.coverGlow} />
+        <span className={s.listEmoji}>{list.emoji || '🎁'}</span>
+        <span className={`${s.visibilityBadge} ${list.is_public ? s.publicBadge : s.privateBadge}`}>
+          {list.is_public ? '🌍 Публічний' : '🔒 Приватний'}
+        </span>
+      </div>
+      <div className={s.listBody}>
+        <div className={s.listTitleRow}>
+          <div>
+            <h3>{list.title}</h3>
+            <p>{formatDate(list.date_created)}</p>
+          </div>
+          <div className={s.cardActions}>
+            <button type="button" onClick={event => { event.stopPropagation(); onEdit() }} aria-label="Редагувати список">
+              <AppIcon name="edit" size={16} />
+            </button>
+            <button type="button" className={s.dangerButton} onClick={event => { event.stopPropagation(); onDelete() }} aria-label="Видалити список">
+              <AppIcon name="trash" size={16} />
+            </button>
+          </div>
+        </div>
 
-export default function Lists({ onNav }) {
-  const [lists, setLists]             = useState([])
-  const [items, setItems]             = useState([])
-  const [loading, setLoading]         = useState(true)
+        <div className={s.previewStrip}>
+          {preview.length > 0 ? preview.map((item, index) => (
+            <div className={s.previewItem} key={item.id || index} title={item.title}>
+              {item.image_url ? <img src={item.image_url} alt="" /> : <AppIcon name="gift" size={16} />}
+            </div>
+          )) : (
+            <div className={s.emptyPreview}><AppIcon name="gift" size={17} /> Додай перше бажання</div>
+          )}
+        </div>
+
+        <div className={s.listBottom}>
+          <div className={s.countGroup}>
+            <strong>{list.items_count || 0}</strong><span>бажань</span>
+            {Number(list.reserved_count || 0) > 0 && <em>{list.reserved_count} заброньовано</em>}
+          </div>
+          <span className={s.openHint}>Відкрити <AppIcon name="arrowRight" size={15} /></span>
+        </div>
+      </div>
+    </article>
+  )
+}
+
+function WishlistDetail({ list, items, loading, onBack, onAdd, onEditList, onEditItem, onDeleteItem }) {
+  return (
+    <div className={s.detailPage}>
+      <div className={s.detailHeader}>
+        <button type="button" className={s.backButton} onClick={onBack}>
+          <AppIcon name="arrowLeft" size={18} /> Назад до списків
+        </button>
+        <div className={s.detailActions}>
+          <button type="button" className="btn-outline" onClick={onEditList}><AppIcon name="edit" size={16} /> Редагувати</button>
+          <button type="button" className="btn-primary" onClick={onAdd}><AppIcon name="plus" size={17} /> Додати бажання</button>
+        </div>
+      </div>
+
+      <section className={s.detailHero}>
+        <div className={s.detailEmoji}>{list.emoji || '🎁'}</div>
+        <div className={s.detailCopy}>
+          <span className={list.is_public ? s.detailPublic : s.detailPrivate}>{list.is_public ? '🌍 Публічний список' : '🔒 Приватний список'}</span>
+          <h1>{list.title}</h1>
+          <p>{items.length} {items.length === 1 ? 'бажання' : 'бажань'} · створено {formatDate(list.date_created).toLowerCase()}</p>
+        </div>
+      </section>
+
+      {loading ? (
+        <div className={s.loadingState}><div className="auth-spinner" /><span>Завантажуємо бажання…</span></div>
+      ) : items.length === 0 ? (
+        <div className={s.emptyState}>
+          <div className={s.emptyIcon}><AppIcon name="gift" size={36} /></div>
+          <h2>У цьому списку ще порожньо</h2>
+          <p>Додай товар вручну або встав посилання — Wishlle спробує підтягнути назву, ціну та фото.</p>
+          <button type="button" className="btn-primary" onClick={onAdd}><AppIcon name="plus" size={17} /> Додати перше бажання</button>
+        </div>
+      ) : (
+        <div className={s.itemsGrid}>
+          {items.map(item => (
+            <article className={s.itemCard} key={item.id}>
+              <div className={s.itemImage}>
+                {item.image_url ? <img src={item.image_url} alt={item.title} /> : <AppIcon name="gift" size={36} />}
+                <span className={`${s.itemStatus} ${item.status === 'reserved' ? s.statusReserved : s.statusAvailable}`}>
+                  {item.status === 'reserved' ? 'Заброньовано' : item.status === 'purchased' ? 'Придбано' : 'Доступно'}
+                </span>
+              </div>
+              <div className={s.itemBody}>
+                <div className={s.itemTop}>
+                  <h3>{item.title}</h3>
+                  {item.price !== null && item.price !== undefined && <strong>{formatPrice(item.price)}</strong>}
+                </div>
+                {item.notes && <p>{item.notes}</p>}
+                <div className={s.itemFooter}>
+                  {item.url ? (
+                    <a href={item.url} target="_blank" rel="noreferrer"><AppIcon name="link" size={15} /> Перейти до товару</a>
+                  ) : <span className={s.noLink}>Без посилання</span>}
+                  <div>
+                    <button type="button" onClick={() => onEditItem(item)} aria-label="Редагувати"><AppIcon name="edit" size={16} /></button>
+                    <button type="button" className={s.dangerButton} onClick={() => onDeleteItem(item)} aria-label="Видалити"><AppIcon name="trash" size={16} /></button>
+                  </div>
+                </div>
+              </div>
+            </article>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+export default function Lists() {
+  const [lists, setLists] = useState([])
+  const [items, setItems] = useState([])
   const [selectedList, setSelectedList] = useState(null)
-  const [showListModal, setShowListModal] = useState(false)
-  const [editingList, setEditingList]   = useState(null)
-  const [showItemModal, setShowItemModal] = useState(false)
-  const [editingItem, setEditingItem]   = useState(null)
-  const [filter, setFilter]           = useState(0)
-
-  const FILTERS = ['Всі', 'Публічні', 'Приватні']
-
-  useEffect(() => {
-    loadLists()
-  }, [])
-
-  useEffect(() => {
-    if (selectedList) loadItems(selectedList.id)
-  }, [selectedList])
+  const [loading, setLoading] = useState(true)
+  const [itemsLoading, setItemsLoading] = useState(false)
+  const [error, setError] = useState('')
+  const [search, setSearch] = useState('')
+  const [filter, setFilter] = useState('all')
+  const [listModal, setListModal] = useState(null)
+  const [itemModal, setItemModal] = useState(null)
 
   async function loadLists() {
     setLoading(true)
+    setError('')
     try {
       const data = await getMyLists()
       setLists(Array.isArray(data) ? data : [])
-    } catch { setLists([]) }
-    finally { setLoading(false) }
+      if (selectedList) {
+        const refreshed = (Array.isArray(data) ? data : []).find(entry => String(entry.id) === String(selectedList.id))
+        if (refreshed) setSelectedList(refreshed)
+      }
+    } catch (requestError) {
+      setError(requestError?.message || 'Не вдалося завантажити списки.')
+    } finally {
+      setLoading(false)
+    }
   }
 
-  async function loadItems(listId) {
+  async function loadItems(list) {
+    setItemsLoading(true)
+    setError('')
     try {
-      const data = await getListItems(listId)
+      const data = await getListItems(list.id)
       setItems(Array.isArray(data) ? data : [])
-    } catch { setItems([]) }
-  }
-
-  async function handleSaveList(form) {
-    if (editingList) {
-      await updateList(editingList.id, form)
-    } else {
-      await createList(form)
+    } catch (requestError) {
+      setError(requestError?.message || 'Не вдалося завантажити бажання.')
+      setItems([])
+    } finally {
+      setItemsLoading(false)
     }
-    setShowListModal(false)
-    setEditingList(null)
-    loadLists()
   }
 
-  async function handleDeleteList(id, e) {
-    e.stopPropagation()
-    if (!confirm('Видалити список?')) return
-    await deleteList(id)
-    if (selectedList?.id === id) setSelectedList(null)
-    loadLists()
+  useEffect(() => { loadLists() }, [])
+
+  async function openList(list) {
+    setSelectedList(list)
+    setItems([])
+    await loadItems(list)
+    window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
-  async function handleSaveItem(form) {
-    if (editingItem) {
-      await updateItem(editingItem.id, form)
+  async function saveList(payload) {
+    if (listModal?.id) {
+      const updated = await updateList(listModal.id, payload)
+      setLists(current => current.map(entry => String(entry.id) === String(updated.id) ? { ...entry, ...updated } : entry))
+      if (selectedList && String(selectedList.id) === String(updated.id)) setSelectedList(current => ({ ...current, ...updated }))
     } else {
-      await createItem(form)
+      const created = await createList(payload)
+      setLists(current => [created, ...current])
     }
-    setShowItemModal(false)
-    setEditingItem(null)
-    if (selectedList) loadItems(selectedList.id)
+    setListModal(null)
+    await loadLists()
   }
 
-  async function handleDeleteItem(id) {
-    if (!confirm('Видалити бажання?')) return
-    await deleteItem(id)
-    loadItems(selectedList.id)
-  }
-
-  async function handleReserve(item) {
-    if (item.status === 'reserved') return
+  async function removeList(list) {
+    if (!window.confirm(`Видалити список «${list.title}» разом з усіма бажаннями?`)) return
     try {
-      await reserveItem(item.id)
-      loadItems(selectedList.id)
-    } catch (e) { alert(e.message) }
+      await deleteList(list.id)
+      setLists(current => current.filter(entry => String(entry.id) !== String(list.id)))
+      if (selectedList && String(selectedList.id) === String(list.id)) {
+        setSelectedList(null)
+        setItems([])
+      }
+    } catch (requestError) {
+      setError(requestError?.message || 'Не вдалося видалити список.')
+    }
   }
 
-  const filteredLists = lists.filter(l => {
-    if (filter === 1) return l.is_public
-    if (filter === 2) return !l.is_public
-    return true
-  })
+  async function saveItem(payload) {
+    if (!selectedList) return
+    if (itemModal?.id) {
+      const updated = await updateItem(itemModal.id, payload)
+      setItems(current => current.map(entry => String(entry.id) === String(updated.id) ? updated : entry))
+    } else {
+      const created = await createItem(selectedList.id, payload)
+      setItems(current => [created, ...current])
+    }
+    setItemModal(null)
+    await loadLists()
+  }
 
-  const totalItems = lists.reduce((acc, l) => acc + (l.items_count || 0), 0)
+  async function removeItem(item) {
+    if (!window.confirm(`Видалити бажання «${item.title}»?`)) return
+    try {
+      await deleteItem(item.id)
+      setItems(current => current.filter(entry => String(entry.id) !== String(item.id)))
+      await loadLists()
+    } catch (requestError) {
+      setError(requestError?.message || 'Не вдалося видалити бажання.')
+    }
+  }
+
+  const filteredLists = useMemo(() => lists.filter(list => {
+    const matchesSearch = list.title.toLowerCase().includes(search.trim().toLowerCase())
+    const matchesFilter = filter === 'all' || (filter === 'public' ? list.is_public : !list.is_public)
+    return matchesSearch && matchesFilter
+  }), [filter, lists, search])
+
+  if (selectedList) {
+    return (
+      <div className="anim-fade-up">
+        <div className="wrap">
+          {error && <div className={s.pageError}>{error}<button type="button" onClick={() => loadItems(selectedList)}>Повторити</button></div>}
+          <WishlistDetail
+            list={selectedList}
+            items={items}
+            loading={itemsLoading}
+            onBack={() => { setSelectedList(null); setItems([]); setError('') }}
+            onAdd={() => setItemModal({})}
+            onEditList={() => setListModal(selectedList)}
+            onEditItem={item => setItemModal(item)}
+            onDeleteItem={removeItem}
+          />
+          <Footer />
+        </div>
+        {listModal && <ListModal list={listModal?.id ? listModal : null} onClose={() => setListModal(null)} onSave={saveList} />}
+        {itemModal && <ItemModal item={itemModal?.id ? itemModal : null} onClose={() => setItemModal(null)} onSave={saveItem} />}
+      </div>
+    )
+  }
 
   return (
     <div className="anim-fade-up">
       <div className="wrap">
-        <div className="content-toolbar">
+        <section className={s.pageHero}>
           <div>
-            <strong>{lists.length} {lists.length === 1 ? 'список' : 'списків'}</strong>
-            <span>{totalItems} бажань у твоїй колекції</span>
+            <span>Твоя колекція бажань</span>
+            <h1>Мої списки</h1>
+            <p>Збирай усе бажане в одному місці та відкривай потрібні списки друзям.</p>
           </div>
-          <button className="btn-primary" onClick={() => { setEditingList(null); setShowListModal(true) }}>＋ Новий список</button>
-        </div>
+          <button type="button" className="btn-primary" onClick={() => setListModal({})}>
+            <AppIcon name="plus" size={18} /> Створити список
+          </button>
+        </section>
 
-        {selectedList ? (
-          // ── Вид конкретного списку ──────────────────────────────────────
-          <div style={{ paddingTop: 24 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 24 }}>
-              <button className="btn-sm" onClick={() => { setSelectedList(null); setItems([]) }}>← Назад</button>
-              <div style={{ flex: 1, fontWeight: 900, fontSize: '1.1rem' }}>{selectedList.title}</div>
-              <button className="btn-sm cyan" onClick={() => { setShowItemModal(true); setEditingItem(null) }}>＋ Додати</button>
-              <button className="btn-sm" onClick={() => { setEditingList(selectedList); setShowListModal(true) }}>✏️</button>
-            </div>
+        <Stats lists={lists} />
 
-            {items.length === 0 ? (
-              <div style={{ textAlign: 'center', padding: '60px 0', color: 'var(--muted)' }}>
-                <div style={{ fontSize: '3rem', marginBottom: 12 }}>🎁</div>
-                <div style={{ fontWeight: 700, marginBottom: 8 }}>Список порожній</div>
-                <div style={{ fontSize: '0.85rem', marginBottom: 20 }}>Додай перше бажання</div>
-                <button className="btn-primary" onClick={() => setShowItemModal(true)}>＋ Додати бажання</button>
-              </div>
-            ) : (
-              <div className={s.wishList}>
-                {items.map(item => (
-                  <div key={item.id} className={s.wishRow}>
-                    <div className={s.wrImg}>
-                      {item.image_url
-                        ? <img src={item.image_url} alt={item.title} style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 12 }} />
-                        : '🎁'}
-                    </div>
-                    <div className={s.wrInfo}>
-                      <div className={s.wrName}>{item.title}</div>
-                      {item.notes && <div className={s.wrMeta}>{item.notes}</div>}
-                    </div>
-                    <span className={`tag ${item.status === 'reserved' ? 'orange' : 'green'}`}>
-                      {item.status === 'reserved' ? 'Зарезервовано' : 'Вільний'}
-                    </span>
-                    {item.price && <div className={s.wrPrice}>{Number(item.price).toLocaleString('uk-UA')} ₴</div>}
-                    <div className={s.wrActions}>
-                      {item.url && <a className="icon-btn" href={item.url} target="_blank" rel="noreferrer">🔗</a>}
-                      <div className="icon-btn" onClick={() => { setEditingItem(item); setShowItemModal(true) }}>✏️</div>
-                      <div className="icon-btn" onClick={() => handleDeleteItem(item.id)}>🗑️</div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
+        <section className={s.controls}>
+          <div className={s.searchBox}>
+            <AppIcon name="search" size={18} />
+            <input value={search} placeholder="Пошук серед моїх списків" onChange={event => setSearch(event.target.value)} />
+            {search && <button type="button" onClick={() => setSearch('')} aria-label="Очистити"><AppIcon name="close" size={15} /></button>}
+          </div>
+          <div className={s.filters}>
+            {FILTERS.map(option => (
+              <button
+                type="button"
+                key={option.value}
+                className={filter === option.value ? s.filterActive : ''}
+                onClick={() => setFilter(option.value)}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+        </section>
+
+        {error && <div className={s.pageError}>{error}<button type="button" onClick={loadLists}>Повторити</button></div>}
+
+        {loading ? (
+          <div className={s.loadingState}><div className="auth-spinner" /><span>Завантажуємо списки…</span></div>
+        ) : filteredLists.length === 0 ? (
+          <div className={s.emptyState}>
+            <div className={s.emptyIcon}><AppIcon name="lists" size={36} /></div>
+            <h2>{lists.length === 0 ? 'Створи свій перший список' : 'Нічого не знайдено'}</h2>
+            <p>{lists.length === 0 ? 'Наприклад: «На день народження», «Техніка» або «Мрії на майбутнє».' : 'Зміни пошуковий запит або обери інший фільтр.'}</p>
+            {lists.length === 0 && <button type="button" className="btn-primary" onClick={() => setListModal({})}><AppIcon name="plus" size={17} /> Створити список</button>}
           </div>
         ) : (
-          // ── Сітка списків ────────────────────────────────────────────────
-          <div style={{ paddingTop: 28 }}>
-            <div className="pills">
-              {FILTERS.map((f, i) => (
-                <div key={f} className={`pill ${filter === i ? 'active' : ''}`} onClick={() => setFilter(i)}>{f}</div>
-              ))}
-            </div>
-
-            {loading ? (
-              <div style={{ textAlign: 'center', padding: '60px 0', color: 'var(--muted)' }}>Завантаження...</div>
-            ) : (
-              <div className={s.listsGrid}>
-                {filteredLists.map((l, idx) => (
-                  <div key={l.id} className={s.listCard} onClick={() => setSelectedList(l)}>
-                    <div className={`${s.listCover} ${s[GRAD_COLORS[idx % GRAD_COLORS.length]]}`}>
-                      <span style={{ fontSize: '2.4rem' }}>{l.emoji || '🎁'}</span>
-                      <div className={s.lcBadge}>{l.is_public ? '🔓 Публічний' : '🔒 Приватний'}</div>
-                    </div>
-                    <div className={s.listBody}>
-                      <div className={s.listName}>{l.title}</div>
-                      <div className={s.listMeta}>
-                        {l.date_created ? new Date(l.date_created).toLocaleDateString('uk-UA', { day: 'numeric', month: 'short' }) : ''}
-                      </div>
-                      <div className={s.listFooter}>
-                        <span className="tag cyan">{l.items_count || 0} бажань</span>
-                        <div style={{ display: 'flex', gap: 6 }}>
-                          <div className="icon-btn" onClick={e => { e.stopPropagation(); setEditingList(l); setShowListModal(true) }}>✏️</div>
-                          <div className="icon-btn" onClick={e => handleDeleteList(l.id, e)}>🗑️</div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-
-                <div className={s.addCard} onClick={() => { setEditingList(null); setShowListModal(true) }}>
-                  <div className={s.addPlus}>＋</div>
-                  <div>Створити список</div>
-                </div>
-              </div>
-            )}
+          <div className={s.listsGrid}>
+            {filteredLists.map(list => (
+              <ListCard
+                key={list.id}
+                list={list}
+                onOpen={() => openList(list)}
+                onEdit={() => setListModal(list)}
+                onDelete={() => removeList(list)}
+              />
+            ))}
+            <button type="button" className={s.addCard} onClick={() => setListModal({})}>
+              <span><AppIcon name="plus" size={25} /></span>
+              <strong>Новий список</strong>
+              <small>Збери нову добірку бажань</small>
+            </button>
           </div>
         )}
 
         <Footer />
       </div>
 
-      {showListModal && (
-        <ListModal
-          list={editingList}
-          onClose={() => { setShowListModal(false); setEditingList(null) }}
-          onSave={handleSaveList}
-        />
-      )}
-
-      {showItemModal && selectedList && (
-        <ItemModal
-          listId={selectedList.id}
-          item={editingItem}
-          onClose={() => { setShowItemModal(false); setEditingItem(null) }}
-          onSave={handleSaveItem}
-        />
-      )}
+      {listModal && <ListModal list={listModal?.id ? listModal : null} onClose={() => setListModal(null)} onSave={saveList} />}
     </div>
   )
 }

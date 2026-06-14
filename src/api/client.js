@@ -151,48 +151,48 @@ export async function parseUrl(url) {
 
 // ── Wish Lists ────────────────────────────────────────────────────────────
 export async function getMyLists() {
-  const userId = getUserId()
-  return directus(`/items/wish_lists?filter[owner_id][_eq]=${userId}&sort[]=-date_created&fields[]=*`)
+  return request(`${BACKEND_URL}/api/wishlists`)
 }
 
 export async function createList(payload) {
-  return directus('/items/wish_lists', {
+  return request(`${BACKEND_URL}/api/wishlists`, {
     method: 'POST',
-    body: JSON.stringify({ ...payload, owner_id: getUserId() }),
+    body: JSON.stringify(payload),
   })
 }
 
 export async function updateList(id, payload) {
-  return directus(`/items/wish_lists/${id}`, { method: 'PATCH', body: JSON.stringify(payload) })
+  return request(`${BACKEND_URL}/api/wishlists/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
+  })
 }
 
 export async function deleteList(id) {
-  return directus(`/items/wish_lists/${id}`, { method: 'DELETE' })
+  return request(`${BACKEND_URL}/api/wishlists/${id}`, { method: 'DELETE' })
 }
 
 // ── Wish Items ────────────────────────────────────────────────────────────
 export async function getListItems(wishlistId) {
-  return directus(`/items/wish_items?filter[wishlist_id][_eq]=${wishlistId}&sort[]=-date_created`)
+  return request(`${BACKEND_URL}/api/wishlists/${wishlistId}/items`)
 }
 
-export async function createItem(payload) {
-  return directus('/items/wish_items', { method: 'POST', body: JSON.stringify(payload) })
+export async function createItem(wishlistId, payload) {
+  return request(`${BACKEND_URL}/api/wishlists/${wishlistId}/items`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  })
 }
 
 export async function updateItem(id, payload) {
-  return directus(`/items/wish_items/${id}`, { method: 'PATCH', body: JSON.stringify(payload) })
+  return request(`${BACKEND_URL}/api/wishlists/items/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
+  })
 }
 
 export async function deleteItem(id) {
-  return directus(`/items/wish_items/${id}`, { method: 'DELETE' })
-}
-
-export async function reserveItem(itemId) {
-  await directus('/items/reservations', {
-    method: 'POST',
-    body: JSON.stringify({ item_id: itemId, reserved_by: getUserId() }),
-  })
-  return updateItem(itemId, { status: 'reserved' })
+  return request(`${BACKEND_URL}/api/wishlists/items/${id}`, { method: 'DELETE' })
 }
 
 // ── Friends ───────────────────────────────────────────────────────────────
