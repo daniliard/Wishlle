@@ -381,3 +381,19 @@ export async function markAllNotificationsRead() {
 export async function deleteNotification(id) {
   return request(`${BACKEND_URL}/api/notifications/${id}`, { method: 'DELETE' })
 }
+
+// ── Public shareable wishlist (без авторизації) ─────────────────────────────
+export async function getPublicList(listId) {
+  return request(`${BACKEND_URL}/api/public/list/${listId}`)
+}
+
+export async function publicReserveItem(itemId) {
+  return request(`${BACKEND_URL}/api/public/reserve`, {
+    method: 'POST',
+    body: JSON.stringify({ item_id: itemId }),
+  })
+}
+
+export function getShareUrl(listId) {
+  return `${window.location.origin}/share/${listId}`
+}

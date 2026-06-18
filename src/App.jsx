@@ -9,6 +9,7 @@ import Catalog from './pages/Catalog'
 import Account from './pages/Account'
 import LandingPage from './pages/LandingPage'
 import AuthCallback from './pages/AuthCallback'
+import SharePage from './pages/SharePage'
 import { getMe, isLoggedIn, loginTelegram, logout } from './api/client'
 import { completeStoredBrowserLogin } from './auth/browserTelegram'
 import { isTelegramMiniApp, looksLikeTelegramLaunch, telegramReady, waitForTelegramInitData } from './auth/telegram'
@@ -25,6 +26,13 @@ const PAGES = {
 
 export default function App() {
   const { setLanguage, tr } = useLanguage()
+
+  // Публічна share-сторінка — відкривається без авторизації
+  const shareMatch = window.location.pathname.match(/^\/share\/([^/]+)/)
+  if (shareMatch) {
+    return <SharePage listId={decodeURIComponent(shareMatch[1])} />
+  }
+
   const authParams = new URLSearchParams(window.location.search)
   const isOAuthCallback = window.location.pathname === '/auth/callback' || authParams.has('code') || authParams.has('error')
 

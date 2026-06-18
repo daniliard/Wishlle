@@ -29,6 +29,7 @@ export default function Catalog({ onNav }) {
   const [activeCat, setActiveCat] = useState('all')
   const [adding, setAdding] = useState(null)
   const [addedTo, setAddedTo] = useState({})
+  const [addedLists, setAddedLists] = useState({})
   const [pickFor, setPickFor] = useState(null)
   const [detail, setDetail] = useState(null)
   const [message, setMessage] = useState({ type: '', text: '' })
@@ -59,6 +60,11 @@ export default function Catalog({ onNav }) {
     setMessage({ type: '', text: '' })
     try {
       await addCatalogItemToList(product.id, listId)
+      // Запам'ятовуємо в які списки товар уже додано (щоб прибрати їх із пікера)
+      setAddedLists(prev => ({
+        ...prev,
+        [product.id]: [...(prev[product.id] || []), listId],
+      }))
       setAddedTo(prev => ({ ...prev, [product.id]: list?.title || tr('Список', 'List') }))
       setPickFor(null)
       setDetail(null)
@@ -71,11 +77,22 @@ export default function Catalog({ onNav }) {
     }
   }
 
+  // Списки, куди товар ще НЕ додано
+  function availableLists(product) {
+    const used = addedLists[product?.id] || []
+    return myLists.filter(l => !used.includes(l.id))
+  }
+
   // Клік «В список»: якщо немає списків — на сторінку списків,
   // якщо один — одразу додаємо, якщо декілька — пікер.
   function startAdd(product) {
+    const lists = availableLists(product)
     if (myLists.length === 0) { onNav('lists'); return }
-    if (myLists.length === 1) { handleAdd(product, myLists[0].id); return }
+    if (lists.length === 0) {
+      setMessage({ type: 'success', text: tr('Товар уже у всіх ваших списках.', 'Item is already in all your lists.') })
+      return
+    }
+    if (lists.length === 1) { handleAdd(product, lists[0].id); return }
     setPickFor(product)
   }
 
@@ -216,7 +233,7 @@ export default function Catalog({ onNav }) {
         <div className={s.backdrop} onMouseDown={() => setPickFor(null)}>
           <div className={s.pickerModal} onMouseDown={e => e.stopPropagation()}>
             <div className={s.pickerTitle}>{tr('У який список додати?', 'Which list to add to?')}</div>
-            {myLists.map(l => (
+            {availableLists(pickFor).map(l => (
               <button key={l.id} className={s.pickerItem} onClick={() => handleAdd(pickFor, l.id)} disabled={adding === pickFor.id}>
                 <ListPickerCover value={l.emoji} /> {l.title}
               </button>

@@ -6,7 +6,7 @@ export default function Footer() {
     <footer className="site-footer">
       <div style={{ display: 'flex', alignItems: 'center' }}>
         <div className="footer-logo">Wishlle</div>
-        <div className="footer-copy">© 2026 Wishlle. {tr('Дипломна робота ДТЕУ', 'Bachelor thesis, SUTE')}</div>
+        <div className="footer-copy">© 2026 Wishlle</div>
       </div>
       <div className="footer-links">
         <a>{tr('Про проєкт', 'About')}</a>

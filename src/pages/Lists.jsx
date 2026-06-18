@@ -9,6 +9,7 @@ import {
   deleteList,
   getListItems,
   getMyLists,
+  getShareUrl,
   parseUrl,
   updateItem,
   updateList,
@@ -448,6 +449,34 @@ function ListCard({ list, onOpen, onEdit, onDelete }) {
   )
 }
 
+function ShareButton({ listId }) {
+  const { tr } = useLanguage()
+  const [copied, setCopied] = useState(false)
+
+  async function handleShare() {
+    const url = getShareUrl(listId)
+    try {
+      if (navigator.share) {
+        await navigator.share({ title: 'Wishlle', url })
+        return
+      }
+      await navigator.clipboard.writeText(url)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    } catch {
+      // Якщо clipboard недоступний — показуємо prompt
+      window.prompt(tr('Скопіюй посилання:', 'Copy the link:'), url)
+    }
+  }
+
+  return (
+    <button type="button" className="btn-outline" onClick={handleShare}>
+      <AppIcon name={copied ? 'check' : 'link'} size={16} />
+      {copied ? tr('Скопійовано!', 'Copied!') : tr('Поділитися', 'Share')}
+    </button>
+  )
+}
+
 function WishlistDetail({ list, items, loading, onBack, onAdd, onEditList, onOpenItem, onEditItem, onDeleteItem }) {
   const { tr, locale } = useLanguage()
   return (
@@ -457,6 +486,7 @@ function WishlistDetail({ list, items, loading, onBack, onAdd, onEditList, onOpe
           <AppIcon name="arrowLeft" size={18} /> {tr('Назад до списків', 'Back to lists')}
         </button>
         <div className={s.detailActions}>
+          {listVisibility(list) === 'public' && <ShareButton listId={list.id} />}
           <button type="button" className="btn-outline" onClick={onEditList}><AppIcon name="edit" size={16} /> {tr('Редагувати', 'Edit')}</button>
           <button type="button" className="btn-primary" onClick={onAdd}><AppIcon name="plus" size={17} /> {tr('Додати бажання', 'Add wish')}</button>
         </div>

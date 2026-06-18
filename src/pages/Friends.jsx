@@ -109,6 +109,7 @@ export default function Friends() {
   // Перегляд повного списку друга + резервування
   const [listView, setListView] = useState(null)
   const [listViewLoading, setListViewLoading] = useState(false)
+  const [itemDetail, setItemDetail] = useState(null)
   const [reservingId, setReservingId] = useState('')
 
   async function loadFriends() {
@@ -645,11 +646,11 @@ export default function Friends() {
                 const mine = item.reserved_by_me
                 return (
                   <article className={`${s.reserveItem} ${reserved ? s.reserveItemTaken : ''}`} key={item.id}>
-                    <div className={s.reserveThumb}>
+                    <div className={s.reserveThumb} onClick={() => setItemDetail(item)} style={{ cursor: 'pointer' }}>
                       {item.image_url ? <img src={item.image_url} alt="" /> : <span>🎁</span>}
                     </div>
                     <div className={s.reserveInfo}>
-                      <h4>{item.title}</h4>
+                      <h4 onClick={() => setItemDetail(item)} style={{ cursor: 'pointer' }}>{item.title}</h4>
                       {item.price != null && <span className={s.reservePrice}>{Number(item.price).toLocaleString(language === 'en' ? 'en-US' : 'uk-UA')} ₴</span>}
                       {item.notes && <p>{item.notes}</p>}
                       {item.url && (!reserved || mine) && <a href={item.url} target="_blank" rel="noreferrer" className={s.reserveLink}><AppIcon name="link" size={13} />{tr('Перейти до товару', 'Open product')}</a>}
@@ -677,6 +678,42 @@ export default function Friends() {
               })}
             </div>
           )}
+        </Modal>
+      )}
+
+      {itemDetail && (
+        <Modal onClose={() => setItemDetail(null)}>
+          <div className={s.itemCard}>
+            <div className={s.itemCardImage}>
+              {itemDetail.image_url ? <img src={itemDetail.image_url} alt={itemDetail.title} /> : <span>🎁</span>}
+            </div>
+            <div className={s.itemCardBody}>
+              <h2>{itemDetail.title}</h2>
+              {itemDetail.price != null && (
+                <div className={s.itemCardPrice}>{Number(itemDetail.price).toLocaleString(language === 'en' ? 'en-US' : 'uk-UA')} ₴</div>
+              )}
+              {itemDetail.notes && <p className={s.itemCardNotes}>{itemDetail.notes}</p>}
+              {itemDetail.is_reserved && !itemDetail.reserved_by_me && (
+                <div className={s.itemCardReserved}>🔒 {tr('Цей подарунок уже зарезервовано', 'This gift is already reserved')}</div>
+              )}
+              <div className={s.itemCardActions}>
+                {itemDetail.url && (!itemDetail.is_reserved || itemDetail.reserved_by_me) && (
+                  <a className="btn-outline" href={itemDetail.url} target="_blank" rel="noreferrer">
+                    <AppIcon name="link" size={15} /> {tr('Перейти до товару', 'Open product')}
+                  </a>
+                )}
+                {itemDetail.reserved_by_me ? (
+                  <button type="button" className={s.reserveCancel} onClick={() => { handleCancelReserve(itemDetail); setItemDetail(null) }} disabled={reservingId === itemDetail.id}>
+                    {tr('Скасувати резервування', 'Cancel reservation')}
+                  </button>
+                ) : !itemDetail.is_reserved ? (
+                  <button type="button" className="btn-primary" onClick={() => { handleReserve(itemDetail); setItemDetail(null) }} disabled={reservingId === itemDetail.id}>
+                    <AppIcon name="gift" size={15} /> {tr('Зарезервувати', 'Reserve')}
+                  </button>
+                ) : null}
+              </div>
+            </div>
+          </div>
         </Modal>
       )}
 

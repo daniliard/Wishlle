@@ -47,3 +47,13 @@
 @media(max-width:900px){.requestsGrid{grid-template-columns:1fr}}
 @media(max-width:560px){.requestCard{align-items:flex-start;flex-wrap:wrap}.requestActions{width:100%;justify-content:flex-end}.requestActions button{flex:1}.requestsSection{padding:14px}}
 .modalTitleCover{display:flex;align-items:center;gap:12px;min-width:0}.modalTitleCover>div:last-child{min-width:0}.modalCoverThumb{width:54px;height:54px;display:grid;place-items:center;flex:0 0 54px;overflow:hidden;border:1px solid var(--border);border-radius:14px;background:rgba(0,200,232,.08);font-size:1.55rem}.modalCoverThumb img,.wishlistCover>img{width:100%;height:100%;object-fit:cover}.wishlistCover>img{position:absolute;inset:0}.wishlistCover b{position:relative;z-index:2}
+
+.itemCard{display:flex;flex-direction:column}
+.itemCardImage{aspect-ratio:16/11;display:grid;place-items:center;overflow:hidden;border-radius:16px;font-size:3.5rem;background:rgba(0,200,232,.05);margin-bottom:18px}
+.itemCardImage img{width:100%;height:100%;object-fit:cover}
+.itemCardBody h2{font-size:1.2rem;line-height:1.25}
+.itemCardPrice{margin-top:8px;color:var(--cyan);font-size:1.3rem;font-weight:900}
+.itemCardNotes{margin-top:12px;color:var(--muted);font-size:.82rem;line-height:1.6}
+.itemCardReserved{margin-top:14px;padding:10px 13px;border:1px solid var(--border);border-radius:11px;background:var(--surface);color:var(--muted);font-size:.74rem}
+.itemCardActions{display:flex;gap:10px;margin-top:20px;flex-wrap:wrap}
+.itemCardActions a,.itemCardActions button{flex:1;min-width:140px;display:inline-flex;align-items:center;justify-content:center;gap:7px;text-decoration:none}
